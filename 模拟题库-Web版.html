@@ -121,6 +121,7 @@ h1{font-size:20px;margin-bottom:4px}
 .card h3{font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .grid{display:grid;gap:14px}
 .grid.c4{grid-template-columns:repeat(4,1fr)}
+.grid.c5{grid-template-columns:repeat(5,1fr)}
 .grid.c2{grid-template-columns:repeat(2,1fr)}
 .stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
 .stat .num{font-size:26px;font-weight:700;margin-top:2px}
@@ -517,7 +518,7 @@ body.is-desktop .modal-mask{top:36px}
 .rev-chip i{width:9px;height:9px;border-radius:2px;display:inline-block}
 @media(max-width:900px){.rate-grid{grid-template-columns:repeat(2,1fr)}}
 a{color:var(--primary)}
-@media(max-width:900px){.main{padding:16px}.grid.c4{grid-template-columns:repeat(2,1fr)}
+@media(max-width:900px){.main{padding:16px}.grid.c4{grid-template-columns:repeat(2,1fr)}.grid.c5{grid-template-columns:repeat(2,1fr)}
   /* 窄屏：强制折叠，且宽度不可拖（避免拖出超窄/超宽的怪尺寸） */
   .sidebar{width:64px!important}.sidebar .logo b,.sidebar .logo small,.sidebar .nav-item span.txt,.sidebar .foot{display:none}
   .sidebar{padding-left:8px;padding-right:8px;align-items:center}
@@ -4145,6 +4146,7 @@ const KB_KIND = {
   kp:   { label: '知识点笔记', ico: '📝', cls: 'amber' },
   mist: { label: '错题笔记',   ico: '📕', cls: 'red' },
   free: { label: '知识库手记', ico: '🗒', cls: 'blue' },
+  fav:  { label: '查询收藏',   ico: '⭐', cls: 'green' },   // v1.38.1：联网查询收藏（随题库隔离，只读快照）
 };
 let kbFilter = { kw: '', kind: '', kp: '' };
 let kbEditing = null;                 // 正在编辑的笔记 key（null = 新建）
@@ -4179,6 +4181,18 @@ function kbAllNotes() {
     out.push({
       key: 'free:' + n.id, kind: 'free', id: n.id, kp: n.kp || '',
       kps: n.kp ? [n.kp] : [], text: n.text, at: n.updatedAt || n.at || 0,
+    });
+  }
+  /* v1.38.1：联网查询收藏并入知识库（只读快照，编辑请走「转笔记」） */
+  for (const f of (Array.isArray(state.wsFavs) ? state.wsFavs : [])) {
+    if (!f) continue;
+    const text = f.kind === 'ai'
+      ? (f.ai || '').trim()
+      : [f.title || '', f.snippet || ''].join('\n').trim();
+    out.push({
+      key: 'fav:' + f.id, kind: 'fav', id: f.id, kp: f.kp || '',
+      kps: f.kp ? [f.kp] : [], text: [f.q || '', text].filter(Boolean).join('\n'),
+      at: f.at || 0, fav: f,
     });
   }
   return out.sort((a, b) => (b.at || 0) - (a.at || 0));
@@ -4217,6 +4231,7 @@ function kbStats(notes) {
     kp: list.filter(n => n.kind === 'kp').length,
     mist: list.filter(n => n.kind === 'mist').length,
     free: list.filter(n => n.kind === 'free').length,
+    fav: list.filter(n => n.kind === 'fav').length,
     kpCount: kpSet.size, covered, graphTotal: graph.size,
     last: list.reduce((a, b) => Math.max(a, b.at || 0), 0),
   };
@@ -4256,6 +4271,24 @@ function kbNoteCard(n) {
   const kps = (n.kps || []).filter(Boolean);
   const pills = kps.slice(0, 2).map(k => `<span class="pill blue" style="cursor:pointer" title="${graph.has(k) ? '在图谱中定位这个知识点' : '题库里还没有这个知识点的题目，图谱暂无节点'}" onclick="goKPDetail('${esc(k)}')">🧠 ${esc(k)}</span>`).join('')
     + (kps.length > 2 ? `<span class="pill gray">+${kps.length - 2}</span>` : '');
+  /* v1.38.1：查询收藏卡 —— 标题可点开原文，AI 问答整段预览，可转笔记 / 取消收藏 */
+  if (n.kind === 'fav' && n.fav) {
+    const f = n.fav;
+    const head = f.kind === 'ai'
+      ? `<div class="kb-note-txt">${esc(f.ai || '（回答内容为空）')}</div>`
+      : `${f.url ? `<div style="margin-bottom:6px"><a href="#" onclick="wsOpenLink(this.getAttribute('data-u'));return false" data-u="${esc(f.url)}" title="用浏览器打开原文">${esc(f.title || f.url)}</a></div>` : `<div style="margin-bottom:6px;font-weight:600">${esc(f.title || f.q || '')}</div>`}${f.snippet ? `<div class="kb-note-txt">${esc(f.snippet)}</div>` : ''}`;
+    return `<div class="kb-note">
+    <div class="kb-note-hd"><span class="pill ${meta.cls}">${meta.ico} ${meta.label}</span>${pills || '<span class="pill gray">未关联知识点</span>'}${f.kind === 'ai' ? '<span class="pill gray">AI 问答</span>' : ''}<span style="flex:1"></span></div>
+    ${head}
+    <div class="kb-note-ft">
+      <span>${fmtDate(n.at)}收藏</span><span style="flex:1"></span>
+      ${f.url ? `<button class="ghost" data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)">打开原文</button>` : ''}
+      ${f.kind === 'ai' ? `<button class="ghost" data-q="${esc(f.q || '')}" data-kp="${esc(f.kp || '')}" onclick="wsOpen(this.dataset.q, this.dataset.kp)" title="重新查一遍这个问题">🔍 再查</button>` : ''}
+      <button class="ghost" data-id="${esc(f.id)}" onclick="wsFavNote(this.dataset.id)" title="整理成知识库笔记（转出来后可编辑）">📝 转笔记</button>
+      <button class="ghost kpn-del" data-id="${esc(f.id)}" onclick="wsFavDel(this.dataset.id)" title="取消收藏">取消收藏</button>
+    </div>
+  </div>`;
+  }
   return `<div class="kb-note">
     <div class="kb-note-hd"><span class="pill ${meta.cls}">${meta.ico} ${meta.label}</span>${pills || '<span class="pill gray">未关联知识点</span>'}<span style="flex:1"></span></div>
     <div class="kb-note-txt">${esc(n.text)}</div>
@@ -4280,7 +4313,7 @@ function kbRenderList() {
     ? `<div class="kb-grid">${list.map(kbNoteCard).join('')}</div>`
     : `<div class="card"><div class="empty">${all.length
         ? '没有符合筛选条件的笔记<br>换个关键词，或把类型切回「全部」'
-        : '还没有任何笔记<br>在图谱里选中知识点写一条，或在错题本给错题记笔记，都会自动收进知识库'}</div></div>`;
+        : '还没有任何笔记或收藏<br>在图谱里选中知识点写一条、错题本记笔记、联网查询里点「⭐ 收藏」，都会自动收进知识库'}</div></div>`;
   const cnt = document.getElementById('kbCount');
   if (cnt) cnt.textContent = `当前显示 ${list.length} / ${all.length} 条`;
 }
@@ -4295,12 +4328,13 @@ function viewKB() {
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh')).slice(0, 6);
   if (kbFilter.kp && !kpOptions.includes(kbFilter.kp)) kbFilter.kp = '';
   $('#view').innerHTML = `
-  <h1>知识库</h1><div class="sub">知识点笔记、错题笔记、手记都收在这里 · 每条笔记都能回图谱定位到对应知识点</div>
-  <div class="grid c4" style="margin-bottom:16px">
+  <h1>知识库</h1><div class="sub">知识点笔记、错题笔记、手记、联网查询收藏都收在这里 · 每条笔记都能回图谱定位到对应知识点</div>
+  <div class="grid c5" style="margin-bottom:16px">
     <div class="stat a"><div class="lbl">笔记总数</div><div class="num">${s.total}</div></div>
     <div class="stat b"><div class="lbl">知识点笔记</div><div class="num">${s.kp}</div></div>
     <div class="stat c"><div class="lbl">错题笔记</div><div class="num">${s.mist}</div></div>
     <div class="stat d"><div class="lbl">知识库手记</div><div class="num">${s.free}</div></div>
+    <div class="stat a"><div class="lbl">查询收藏</div><div class="num">${s.fav}</div></div>
   </div>
   <div class="card noprint">
     <div class="row" style="margin-bottom:10px">
@@ -4378,6 +4412,7 @@ function kbNewNote(kp) {
 function kbEditNote(key) {
   const n = kbAllNotes().find(x => x.key === key);
   if (!n) { toast('这条笔记已不存在，刷新看看', 'err'); return; }
+  if (n.kind === 'fav') { toast('收藏是查询时的快照，不能直接改 —— 点「📝 转笔记」整理成笔记后就能编辑', 'ok'); return; }
   kbEditing = key;
   kbOpenEditor({ kind: n.kind, kp: n.kp, text: n.text, isNew: false });
 }
@@ -4430,6 +4465,9 @@ async function kbDeleteNote(key) {
     if (rec) { rec.note = ''; rec.note_at = Date.now(); await DB.put('mistakes', rec); }
     const local = state.mistakes.find(x => x.id === n.id);
     if (local) { local.note = ''; local.note_at = Date.now(); }
+  } else if (n.kind === 'fav') {
+    state.wsFavs = (state.wsFavs || []).filter(x => x.id !== n.id);
+    wsFavSave();
   } else {
     state.kbNotes = kbFreeNotes().filter(x => x.id !== n.id);
     await DB.bkvSet('kbNotes', state.kbNotes);
@@ -5031,6 +5069,8 @@ function wsFavSave() {
   if (DB.bkvSet) DB.bkvSet('wsFavs', state.wsFavs || []);
   const cnt = document.getElementById('wsFavCnt');
   if (cnt) cnt.textContent = (state.wsFavs || []).length;
+  /* v1.38.1：收藏并入知识库，知识库页开着时同步刷新列表 */
+  if (typeof curView !== 'undefined' && curView === 'kb') kbRenderList();
 }
 function wsFavPush(item) {
   const favs = Array.isArray(state.wsFavs) ? state.wsFavs : [];
@@ -5085,7 +5125,7 @@ function wsFavRender() {
   const wrap = document.getElementById('wsFavWrap');
   if (!wrap) return;
   const list = Array.isArray(state.wsFavs) ? state.wsFavs : [];
-  wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);margin:6px 0 8px">收藏夹（${list.length}/${WS_FAV_MAX}，随当前题库保存）</div>` +
+  wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);margin:6px 0 8px">收藏夹（${list.length}/${WS_FAV_MAX}，随当前题库保存）· 全部收藏也会显示在「知识库 → ⭐ 查询收藏」，方便随时翻看</div>` +
     (list.length ? list.map(f => `
       <div class="ws-fav-i" style="margin-bottom:6px">
         <span class="t" ${f.url ? `data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)" title="${esc(f.url)}"` : ''} style="${f.url ? 'cursor:pointer' : ''}">${f.kind === 'ai' ? '🤖 ' : '🌐 '}${esc(f.title || f.q || '（无标题）')}</span>
@@ -8051,18 +8091,19 @@ const HELP_SECTIONS = [
   },
   {
     id: 'kb', ico: '📚', title: '知识库',
-    html: `<p>把平时写的笔记<b>自动汇总到一处</b>，并且每条都能回「知识点图谱」定位。知识库不复制数据，只是把三处笔记集中展示、统一检索：</p>
+    html: `<p>把平时写的笔记<b>自动汇总到一处</b>，并且每条都能回「知识点图谱」定位。知识库不复制数据，只是把各处笔记集中展示、统一检索（联网查询的收藏也会自动收进来）：</p>
       <table class="help-table">
         <tr><th style="width:130px">来源</th><th>在哪写</th><th>存在哪</th></tr>
         <tr><td>📝 知识点笔记</td><td>图谱里单击知识点 → 详情卡「添加笔记」</td><td>按知识点名保存，一个知识点一条</td></tr>
         <tr><td>📕 错题笔记</td><td>错题本里点某道错题上的「📝 笔记」</td><td>跟着那条错题记录走</td></tr>
         <tr><td>🗒 知识库手记</td><td>本页「＋ 新建笔记」</td><td>随题库保存，可选关联一个知识点</td></tr>
+        <tr><td>⭐ 查询收藏</td><td>联网查询面板里点「⭐ 收藏」/「⭐ 收藏回答」</td><td>随题库保存的收藏快照（只读，可一键转成手记）</td></tr>
       </table>
       <div class="help-h4">怎么用</div>
       <ul>
         <li><b>搜索</b>：输入关键词实时过滤，匹配笔记内容、知识点名和错题题干。</li>
-        <li><b>筛选</b>：上方胶囊切「全部 / 知识点笔记 / 错题笔记 / 手记」，还能按知识点下拉筛选；三者可叠加。</li>
-        <li><b>编辑</b>：卡片右下角「✏️ 编辑」会<b>就地改原处</b>——改知识点笔记，图谱详情同步变；改错题笔记，错题本同步变。</li>
+        <li><b>筛选</b>：上方胶囊切「全部 / 知识点笔记 / 错题笔记 / 手记 / ⭐ 查询收藏」，还能按知识点下拉筛选；可叠加。</li>
+        <li><b>编辑</b>：卡片右下角「✏️ 编辑」会<b>就地改原处</b>——改知识点笔记，图谱详情同步变；改错题笔记，错题本同步变；收藏卡没有编辑按钮，点「📝 转笔记」整理成手记后再改。</li>
         <li><b>删除</b>：只删这条笔记，不会删知识点、题目或错题记录；错题笔记删的是笔记内容。</li>
         <li><b>新建</b>：填「关联知识点」（可从已有知识点里选）就能在图谱里定位；不填则作为纯手记留在知识库。</li>
       </ul>
@@ -8092,7 +8133,7 @@ const HELP_SECTIONS = [
         <tr><th style="width:120px">区域</th><th>说明</th></tr>
         <tr><td>🌐 网页结果（左）</td><td>抓取搜索引擎结果的标题 / 网址 / 摘要，点标题或「打开原文」用默认浏览器打开；「复制链接」方便引用；「💾 存这条」只把这一条存成笔记；「⭐ 收藏」收进收藏夹。搜索引擎有 Bing 国内 / 搜狗 / 360 / Bing 国际 / <b>智能聚合</b>（三路并发合并去重，最全），当前引擎被拦截时自动换其它引擎重试。</td></tr>
         <tr><td>🤖 AI 解答（右）</td><td>把左侧前几条摘要作为参考资料一起交给 AI，生成一段通俗讲解（先结论、再要点、带易错点）。<b>支持连续追问</b>：答完后在右栏底部输入框接着问（如「它和动量定理什么关系」），AI 记得前面聊过什么；「↻ 重答」清空对话重来；「⭐ 收藏回答」把最近一轮问答收进收藏夹。默认搜索完自动开始，可在系统设置里关掉。</td></tr>
-        <tr><td>⭐ 收藏夹（底部）</td><td>收进来的网页结果和 AI 问答都存在这里（随题库隔离，上限 100 条），可随时打开原文、<b>转成知识库笔记</b>或删除。</td></tr>
+        <tr><td>⭐ 收藏夹（底部）</td><td>收进来的网页结果和 AI 问答都存在这里（随题库隔离，上限 100 条），可随时打开原文、<b>转成知识库笔记</b>或删除。<b>所有收藏也会自动出现在「知识库」页的「⭐ 查询收藏」分类里</b>，和笔记放在一起方便翻看。</td></tr>
         <tr><td>🕘 最近查询（底部）</td><td>记着最近 30 次查询（随题库），点一下重新查，不用重复输入。</td></tr>
       </table>
       <div class="help-h4">搜索联想词</div>
