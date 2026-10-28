@@ -14,6 +14,9 @@
  *      → 关闭 schannelCheckRevoke
  *   2. 本机若开着代理（如 127.0.0.1:1148），对 GitHub 会返回 502
  *      → 推送时清空 http.proxy 与代理环境变量
+ *   3. github.com:443 会被间歇性完全掐断（TCP connect 失败，2026-10-28 实战）
+ *      → GitHub 推送失败且报连接类错误时，自动切 SSH 备用通道
+ *        （git@github.com → ~/.ssh/config 指到 ssh.github.com:443，公钥需已在 GitHub 注册）
  * 脚本不会把 Token 写入任何文件，只在本进程内存里拼进本次推送的 URL。
  */
 const { spawnSync } = require('child_process');
@@ -41,6 +44,7 @@ const PLATFORMS = [
     user: 'lingsheng24',
     repo: 'lingsheng24/moni-tiku',
     tokenEnv: 'GH_TOKEN',
+    sshUrl: 'git@github.com:lingsheng24/moni-tiku.git',   // HTTPS 被掐时的备用通道（走 ssh.github.com:443）
   },
   {
     name: 'GitCode',
@@ -117,8 +121,18 @@ for (const p of PLATFORMS) {
     : p.remote; // 无 Token 时用 remote 名，走本机已存凭据
 
   process.stdout.write(`→ ${p.name.padEnd(8)} 推送中…`);
-  const r = git(['push', url, `HEAD:main`], { timeout: 180000 });
-  const out = ((r.stdout || '') + (r.stderr || '')).trim();
+  let r = git(['push', url, `HEAD:main`], { timeout: 180000 });
+  let out = ((r.stdout || '') + (r.stderr || '')).trim();
+
+  // GitHub 专属：HTTPS 被间歇性掐断（TCP connect 失败）时，自动切 SSH 备用通道
+  // （~/.ssh/config 已把 github.com 指到 ssh.github.com:443，公钥须已在 GitHub 注册）
+  if (r.status !== 0 && p.name === 'GitHub'
+      && /failed to connect|could not connect|connection timed out|unable to access/i.test(out)
+      && p.sshUrl) {
+    console.log(' HTTPS 被掐，切 SSH 通道重试…');
+    r = git(['push', p.sshUrl, 'HEAD:main'], { timeout: 180000 });
+    out = ((r.stdout || '') + (r.stderr || '')).trim();
+  }
 
   // 已经把最新提交顶上去，Git 会输出 Everything up-to-date
   if (r.status === 0) {
