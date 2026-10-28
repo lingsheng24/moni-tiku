@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="72" height="72" role="img">
+  <title>知识点图谱图标 · 方案B 层级树</title>
+  <desc>根知识点逐层分叉，强调章节到知识点的从属关系</desc>
+  <g stroke="#4f6ef7" stroke-width="1.6" fill="none" stroke-linecap="round">
+    <line x1="12" y1="7" x2="6.2" y2="11.3"/>
+    <line x1="12" y1="7" x2="17.8" y2="11.3"/>
+    <line x1="6.2" y1="14.9" x2="3.8" y2="18.4"/>
+    <line x1="6.2" y1="14.9" x2="8.8" y2="18.4"/>
+    <line x1="17.8" y1="14.9" x2="17.8" y2="18.2"/>
+  </g>
+  <circle cx="12" cy="4.8" r="2.2" fill="#4f6ef7"/>
+  <circle cx="6.2" cy="13.1" r="1.8" fill="none" stroke="#4f6ef7" stroke-width="1.6"/>
+  <circle cx="17.8" cy="13.1" r="1.8" fill="none" stroke="#4f6ef7" stroke-width="1.6"/>
+  <circle cx="3.8" cy="19.9" r="1.5" fill="#4f6ef7" opacity=".55"/>
+  <circle cx="8.8" cy="19.9" r="1.5" fill="#4f6ef7" opacity=".55"/>
+  <circle cx="17.8" cy="19.9" r="1.5" fill="#4f6ef7" opacity=".55"/>
+</svg>

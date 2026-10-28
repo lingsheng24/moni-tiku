@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="72" height="72" role="img">
+  <title>知识点图谱图标 · 方案A 星形网络</title>
+  <desc>中心核心节点辐射三个知识点，右上一条虚线示意双链关联</desc>
+  <g stroke="#4f6ef7" stroke-width="1.7" fill="none" stroke-linecap="round">
+    <line x1="12" y1="12" x2="12" y2="4.9"/>
+    <line x1="12" y1="12" x2="18.9" y2="16.9"/>
+    <line x1="12" y1="12" x2="5.1" y2="16.9"/>
+    <line x1="12" y1="4.9" x2="18.9" y2="16.9" stroke-dasharray="2 2.6" opacity=".5"/>
+  </g>
+  <circle cx="12" cy="4.9" r="2.1" fill="none" stroke="#4f6ef7" stroke-width="1.7"/>
+  <circle cx="18.9" cy="16.9" r="2.1" fill="none" stroke="#4f6ef7" stroke-width="1.7"/>
+  <circle cx="5.1" cy="16.9" r="2.1" fill="none" stroke="#4f6ef7" stroke-width="1.7"/>
+  <circle cx="12" cy="12" r="2.8" fill="#4f6ef7"/>
+</svg>

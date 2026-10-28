@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="72" height="72" role="img">
+  <title>知识点图谱图标 · 方案D 自由网络</title>
+  <desc>五个节点不规则布连，最接近图谱页 3D 关系球的观感</desc>
+  <g stroke="#4f6ef7" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".9">
+    <line x1="6.3" y1="6.3" x2="17.4" y2="5.2"/>
+    <line x1="6.3" y1="6.3" x2="12.2" y2="12.4"/>
+    <line x1="17.4" y1="5.2" x2="12.2" y2="12.4"/>
+    <line x1="17.4" y1="5.2" x2="19" y2="16.4"/>
+    <line x1="12.2" y1="12.4" x2="19" y2="16.4"/>
+    <line x1="12.2" y1="12.4" x2="5.6" y2="17.8"/>
+    <line x1="5.6" y1="17.8" x2="19" y2="16.4" stroke-dasharray="2 2.6" opacity=".45"/>
+  </g>
+  <circle cx="6.3" cy="6.3" r="1.7" fill="#4f6ef7" opacity=".55"/>
+  <circle cx="17.4" cy="5.2" r="1.7" fill="none" stroke="#4f6ef7" stroke-width="1.5"/>
+  <circle cx="19" cy="16.4" r="1.7" fill="#4f6ef7" opacity=".55"/>
+  <circle cx="5.6" cy="17.8" r="1.7" fill="none" stroke="#4f6ef7" stroke-width="1.5"/>
+  <circle cx="12.2" cy="12.4" r="2.3" fill="#4f6ef7"/>
+</svg>

@@ -1,0 +1,34 @@
+# ---- 依赖 ----
+node_modules/
+desktop/node_modules/
+
+# ---- 构建产物 ----
+desktop/release/
+desktop/dist/
+发布/
+*.exe
+*.exe.blockmap
+*.zip
+*.7z
+
+# ---- 证书与私钥（绝对不能公开）----
+cert/
+*.key
+*.pfx
+*.pem
+*.p12
+*.csr
+*.srl
+
+# ---- 本地备份 / 临时 ----
+*.backup-v*.html
+模拟题库-Web版.backup-*.html
+*.log
+*.tmp
+Thumbs.db
+desktop/dev-app-update.yml
+
+# ---- 编辑器 ----
+.vscode/
+.idea/
+.DS_Store
