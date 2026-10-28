@@ -10,11 +10,13 @@
 |---|---|---|---|
 | **GitCode** | [Releases](https://gitcode.com/JinFengjian/moni-tiku/releases) | <https://gitcode.com/JinFengjian/moni-tiku> | 国内节点，下载与在线更新通常最快（推荐） |
 | **GitHub** | [Releases](https://github.com/lingsheng24/moni-tiku/releases/latest) | <https://github.com/lingsheng24/moni-tiku> | 国际站点，国内访问可能较慢 |
-| **Gitee** | [Releases](https://gitee.com/lingsheng24/moni-tiku/releases) | <https://gitee.com/lingsheng24/moni-tiku> | 国内源码镜像 + 下载备份（安装包均有，但不参与在线更新） |
+| **Gitee** | [Releases](https://gitee.com/lingsheng24/moni-tiku/releases) | <https://gitee.com/lingsheng24/moni-tiku> | 国内源码镜像 + 下载备份（安装包均有，但**只保留最新版**，不参与在线更新） |
 
 安装包分两种：`MoniTiKu-Setup-x.y.z.exe`（安装版，支持应用内在线更新）与 `MoniTiKu-Portable-x.y.z.exe`（免安装便携版，本地 `发布\` 目录里是中文名 `模拟题库-x.y.z-portable.exe`，上传时统一改成英文名）。详见下方「桌面版 → 打包 exe」。
 
 > 三个平台放的是同一个版本、同一批文件，源码同在 `main` 分支。区别只在用途：GitCode / GitHub 同时承担安装包分发与**应用内自动更新**；Gitee 只作第三个下载站（单附件上限 100MB，所以那边没有 `latest.yml` 和差量更新包）。
+>
+> **Gitee 只保留最新版**：仓库附件总量上限 1GB，发布脚本在本版上传成功后会**自动删除旧版本 Release**，节省容量；需要回看历史版本请到 GitHub / GitCode。想让某次发布保留历史，加 `--keep-old` 参数即可。
 
 ## 一、网页版（无需安装）
 
@@ -58,7 +60,7 @@
 |---|---|---|
 | GitCode | <https://gitcode.com/JinFengjian/moni-tiku> | 国内节点，实测 **6~8 MB/s**（90MB 约 15 秒），通常最快 |
 | GitHub | <https://github.com/lingsheng24/moni-tiku> | 国内可能只有 0.06~0.4 MB/s，慢 |
-| Gitee | <https://gitee.com/lingsheng24/moni-tiku> | 第三个下载站，有安装包/便携版，**不参与自动更新** |
+| Gitee | <https://gitee.com/lingsheng24/moni-tiku> | 第三个下载站，有安装包/便携版，**只保留最新版**，**不参与自动更新** |
 
 软件每次「检查更新」会串行测速这 5 条线路（GitCode / GitHub / 3 个加速镜像），**自动选最快的**；用户也可在「系统设置 → 软件更新」手动锁定某条线路。
 
@@ -188,7 +190,7 @@ desktop/
 ├─ 一键发布.js         顺序调用下面三个脚本；更新源失败即报错，Gitee 失败只提示
 ├─ 发布更新到GitHub.js  发布到 GitHub Release
 ├─ 发布更新到GitCode.js 发布到 GitCode Release（预签名地址 + PUT 两段式上传）
-├─ 发布更新到Gitee.js   发布到 Gitee Release（第三个下载站，附件名统一英文）
+├─ 发布更新到Gitee.js   发布到 Gitee Release（第三个下载站，附件名统一英文；发布成功后自动清理旧版，只留最新）
 ├─ 推送源码.cmd        一键把源码推到 GitHub / GitCode / Gitee（项目根目录）
 └─ 推送源码.js         三平台 git push 封装（自动关吊销检查、清代理）
 ```

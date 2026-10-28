@@ -4,6 +4,7 @@
  * 用法：node desktop\发布更新到Gitee.js
  *       node desktop\发布更新到Gitee.js --skip-portable   只传安装版
  *       node desktop\发布更新到Gitee.js --notes-only      只建 Release 不传文件
+ *       node desktop\发布更新到Gitee.js --keep-old        保留历史版本（默认发布会清掉旧版）
  *
  * Token：GITEE_TOKEN（用户环境变量，勾选 projects 权限）
  *
@@ -11,6 +12,7 @@
  *   · Gitee 只作「第三个下载站」，不参与应用内自动更新（更新源仍是 GitHub / GitCode）
  *   · 单附件上限 100MB、单仓库附件总量 1GB（普通项目）→ 超限自动跳过，不中断发布
  *   · 不上传 blockmap / latest.yml（Gitee 不做差量更新，省容量）
+ *   · **发布成功后自动删除旧版本 Release，Gitee 上只留最新版**（省容量，历史版本在 GitHub / GitCode 都有）
  * 幂等：Release 已存在时复用，附件同名的跳过，可反复运行。
  */
 const fs = require('fs');
@@ -30,6 +32,7 @@ const API = 'https://gitee.com/api/v5';
 const argv = process.argv.slice(2);
 const SKIP_PORTABLE = argv.includes('--skip-portable');
 const NOTES_ONLY = argv.includes('--notes-only');
+const KEEP_OLD = argv.includes('--keep-old');   // 默认发布成功后清理旧版，只留最新版
 
 const C = { ok: '\x1b[32m', warn: '\x1b[33m', err: '\x1b[31m', dim: '\x1b[90m', off: '\x1b[0m' };
 const info = (m) => console.log(m);
@@ -247,5 +250,38 @@ function uploadAsset(releaseId, localPath, uploadName) {
   }
   info(`\nRelease 页面：https://gitee.com/${OWNER}/${REPO}/releases/tag/${TAG}`);
   const hardFail = results.filter((r) => !r.ok && !r.skipped);
-  if (hardFail.length) process.exit(1);
+  if (hardFail.length) {
+    warn('本版附件未全部上传成功，跳过旧版清理（避免删了旧的又拿不到新的）');
+    process.exit(1);
+  }
+
+  // ── 清理旧版：Gitee 只留最新版（省容量，军哥 2026-10-28 确认）──
+  if (KEEP_OLD) { info('\n（--keep-old 已指定，跳过旧版清理）'); return; }
+  await cleanupOldReleases();
 })().catch((e) => die(e.message));
+
+/** 删除除当前 TAG 之外的所有 Release（Gitee 仓库容量有限，只留最新版） */
+async function cleanupOldReleases() {
+  step(`清理旧版（只保留 ${TAG}）`);
+  let list = [];
+  try {
+    list = (await api('GET', `/repos/${OWNER}/${REPO}/releases?page=1&per_page=100`)) || [];
+  } catch (e) {
+    warn(`读取 Release 列表失败，跳过清理：${e.message}`);
+    return;
+  }
+  const olds = list.filter((r) => r.tag_name !== TAG);
+  if (!olds.length) { info('  没有需要清理的旧版本'); return; }
+  let removed = 0;
+  for (const rel of olds) {
+    try {
+      await api('DELETE', `/repos/${OWNER}/${REPO}/releases/${rel.id}`);
+      ok(`已删除旧版 Release ${rel.tag_name}（含全部附件）`);
+      removed++;
+    } catch (e) {
+      warn(`删除 ${rel.tag_name} 失败：${e.message}`);
+    }
+  }
+  const left = (await api('GET', `/repos/${OWNER}/${REPO}/releases?page=1&per_page=100`).catch(() => [])) || [];
+  info(`  当前 Gitee 上 Release：${left.map((r) => r.tag_name).join(', ') || '（无）'}（本次清理 ${removed} 个）`);
+}
