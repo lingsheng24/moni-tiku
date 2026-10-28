@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模拟题库 · 图文使用教程（v1.38.0）</title>
+<style>
+  :root {
+    --brand: #4f6ef7;
+    --brand-dark: #3b55d9;
+    --ink: #1f2430;
+    --muted: #6b7280;
+    --line: #e5e8f0;
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --tip-bg: #eff6ff;
+    --tip-line: #93c5fd;
+    --warn-bg: #fffbeb;
+    --warn-line: #fcd34d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: system-ui, -apple-system, "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.75; font-size: 15px;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+
+  /* 封面 */
+  .cover {
+    background: linear-gradient(135deg, #4f6ef7 0%, #7c5cf5 60%, #9d5cf5 100%);
+    color: #fff; padding: 56px 0 48px; text-align: center;
+  }
+  .cover .badge { display: inline-block; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35); border-radius: 999px; padding: 4px 16px; font-size: 13px; letter-spacing: 1px; }
+  .cover h1 { font-size: 40px; margin: 18px 0 10px; letter-spacing: 2px; }
+  .cover p.sub { font-size: 16px; opacity: .92; max-width: 720px; margin: 0 auto; }
+  .cover .ver { margin-top: 18px; font-size: 13px; opacity: .8; }
+
+  /* 布局 */
+  .layout { display: flex; gap: 28px; align-items: flex-start; padding: 34px 0 70px; }
+  nav.toc {
+    width: 218px; flex: none; position: sticky; top: 18px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 0;
+  }
+  nav.toc .toc-t { font-size: 13px; font-weight: 700; color: var(--muted); padding: 0 18px 8px; letter-spacing: 2px; }
+  nav.toc a { display: block; padding: 7px 18px; color: var(--ink); text-decoration: none; font-size: 13.5px; border-left: 3px solid transparent; }
+  nav.toc a:hover { background: var(--tip-bg); color: var(--brand-dark); }
+  nav.toc a .n { color: var(--brand); font-weight: 700; margin-right: 8px; font-size: 12px; }
+  main { flex: 1; min-width: 0; }
+
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 30px 34px; margin-bottom: 26px; }
+  section h2 { font-size: 23px; display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  section h2 .no {
+    flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--brand); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700;
+  }
+  section h3 { font-size: 16.5px; margin: 22px 0 8px; color: var(--brand-dark); }
+  section p.lead { color: var(--muted); font-size: 13.5px; margin-bottom: 14px; }
+  section p { margin: 8px 0; }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 5px 0; }
+  b { color: #111; }
+  code { background: #eef1f8; border-radius: 5px; padding: 1px 7px; font-size: 13px; color: #4749b0; }
+  kbd { background: #2c3140; color: #fff; border-radius: 5px; padding: 1px 7px; font-size: 12px; font-family: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #f3f5fb; white-space: nowrap; }
+
+  .shot { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 16px 0 6px; box-shadow: 0 2px 10px rgba(31,41,72,.06); }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot-cap { text-align: center; color: var(--muted); font-size: 12.5px; margin: 8px 0 4px; }
+  .steps { counter-reset: st; margin: 10px 0; }
+  .steps li { list-style: none; position: relative; padding-left: 40px; margin: 12px 0; }
+  .steps li::before {
+    counter-increment: st; content: counter(st);
+    position: absolute; left: 0; top: 2px; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--brand); color: #fff; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tip, .warn { border-radius: 10px; padding: 12px 16px; margin: 14px 0; font-size: 13.5px; }
+  .tip { background: var(--tip-bg); border-left: 4px solid var(--tip-line); }
+  .warn { background: var(--warn-bg); border-left: 4px solid var(--warn-line); }
+  .tip b:first-child, .warn b:first-child { display: inline-block; margin-right: 6px; }
+  .flow { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
+  .flow span {
+    background: #eef1fe; color: var(--brand-dark); border: 1px solid #d8defc;
+    border-radius: 999px; padding: 5px 16px; font-size: 13.5px; font-weight: 600;
+  }
+  .flow i { align-self: center; color: var(--muted); font-style: normal; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) {
+    nav.toc { display: none; }
+    .grid2 { grid-template-columns: 1fr; }
+    section { padding: 22px 18px; }
+  }
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 26px 0 40px; }
+  @media print {
+    body { background: #fff; }
+    nav.toc { display: none; }
+    section { border: none; box-shadow: none; page-break-inside: avoid; }
+    .cover { background: var(--brand); -webkit-print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="wrap">
+    <span class="badge">使 用 教 程</span>
+    <h1>模拟题库</h1>
+    <p class="sub">导入你的学习资料，AI 自动出题 —— 练习、考试、错题本、记忆曲线复习、知识图谱，一站配齐的本地刷题工具。</p>
+    <p class="ver">适用版本 v1.38.0 · 更新日期 2026-10-28</p>
+  </div>
+</div>
+
+<div class="wrap layout">
+
+<nav class="toc">
+  <div class="toc-t">目 录</div>
+  <a href="#s1"><span class="n">01</span>获取与安装</a>
+  <a href="#s2"><span class="n">02</span>三分钟上手</a>
+  <a href="#s3"><span class="n">03</span>界面总览</a>
+  <a href="#s4"><span class="n">04</span>文档管理与科目</a>
+  <a href="#s5"><span class="n">05</span>AI 生成题目</a>
+  <a href="#s6"><span class="n">06</span>题库管理</a>
+  <a href="#s7"><span class="n">07</span>答题练习</a>
+  <a href="#s8"><span class="n">08</span>模拟考试与组卷导出</a>
+  <a href="#s9"><span class="n">09</span>错题本</a>
+  <a href="#s10"><span class="n">10</span>间隔复习（记忆曲线）</a>
+  <a href="#s11"><span class="n">11</span>统计分析</a>
+  <a href="#s12"><span class="n">12</span>知识点图谱</a>
+  <a href="#s13"><span class="n">13</span>知识库与联网查询</a>
+  <a href="#s14"><span class="n">14</span>系统设置</a>
+  <a href="#s15"><span class="n">15</span>更新与常见问题</a>
+</nav>
+
+<main>
+
+<!-- ============ 01 ============ -->
+<section id="s1">
+  <h2><span class="no">01</span>获取与安装</h2>
+  <p class="lead">两种形态：绿色便携版（免安装）与安装版（推荐，支持应用内在线更新）。</p>
+
+  <h3>下载地址（三平台内容一致，任选其一）</h3>
+  <table>
+    <tr><th>平台</th><th>下载入口</th><th>说明</th></tr>
+    <tr><td><b>GitCode</b>（推荐）</td><td>gitcode.com/JinFengjian/moni-tiku → Releases</td><td>国内节点，下载最快（实测 90MB 约 15 秒）</td></tr>
+    <tr><td><b>GitHub</b></td><td>github.com/lingsheng24/moni-tiku → Releases</td><td>国际站点，国内访问可能较慢</td></tr>
+    <tr><td><b>Gitee</b></td><td>gitee.com/lingsheng24/moni-tiku → Releases</td><td>第三个下载备份站（不参与在线更新）</td></tr>
+  </table>
+
+  <h3>选择安装包</h3>
+  <table>
+    <tr><th>文件</th><th>特点</th></tr>
+    <tr><td><code>MoniTiKu-Setup-x.y.z.exe</code> 安装版</td><td>双击安装，全中文向导，自动创建桌面/开始菜单快捷方式，<b>支持应用内「检查更新」一键升级</b></td></tr>
+    <tr><td><code>MoniTiKu-Portable-x.y.z.exe</code> 便携版</td><td>免安装单文件，双击即用；不支持在线更新，需手动下载新版替换</td></tr>
+  </table>
+
+  <div class="tip"><b>💡 提示</b>安装包带数字签名。若 Windows SmartScreen 弹出「已保护你的电脑」，点「更多信息 → 仍要运行」即可继续安装。</div>
+
+  <h3>网页版（零安装体验）</h3>
+  <p>不想装软件？直接双击项目里的 <code>模拟题库-Web版.html</code>（Chrome / Edge 打开），功能与桌面版基本一致，数据保存在浏览器里。差异是：PDF/DOCX 解析需联网加载组件、联网搜索受浏览器跨域限制只能在浏览器中打开搜索页。以下教程截图均来自与桌面版共用同一界面的 Web 版。</p>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2">
+  <h2><span class="no">02</span>三分钟上手</h2>
+  <p class="lead">软件的核心工作流只有一条主线：</p>
+  <div class="flow">
+    <span>① 导入文档</span><i>→</i><span>② AI 生成题目</span><i>→</i><span>③ 答题练习</span><i>→</i><span>④ 错题重练 + 记忆曲线复习</span>
+  </div>
+  <ol class="steps">
+    <li><b>导入文档</b>：进入「文档管理」，把 PDF / DOCX / TXT / MD 学习资料导入（也可直接粘贴文本）。</li>
+    <li><b>配置 AI 接口</b>（可选但强烈推荐）：到「系统设置 → AI 接口」填入 API Key。没有 Key 也能用「本地快速出题」，但 AI 出题质量与题型丰富度远胜本地模式。</li>
+    <li><b>生成题目</b>：在「AI 生成题目」页选文档、题型、难度，点生成，题目自动带答案、解析、知识点和原文出处。</li>
+    <li><b>开始练习</b>：进入「答题练习」抽题作答，客观题即时判分；做错的题自动进「错题本」，也可一键加入记忆曲线复习队列。</li>
+  </ol>
+  <div class="tip"><b>💡 提示</b>所有数据都保存在本机（不上传服务器）。想多台电脑同步？在「系统设置 → 数据管理」把数据文件路径指到坚果云 / OneDrive 等同步盘目录即可。</div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <h2><span class="no">03</span>界面总览</h2>
+  <p class="lead">启动后进入「首页总览」：文档数、题库题数、累计练习、错题数一目了然，还有今日复习提醒与总体正确率。</p>
+  <div class="shot"><img src="截图/01-首页总览.png" alt="首页总览"></div>
+  <div class="shot-cap">首页总览 · 顶部四张统计卡 + 今日复习提醒 + 快速开始入口</div>
+  <p>左侧导航栏从上到下依次是全部功能模块；底部「◀ 收起」可把导航折叠成纯图标模式，给正文腾地方。首页「快速开始」卡片就是第 02 节那条主线的快捷入口。</p>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <h2><span class="no">04</span>文档管理与科目</h2>
+  <p class="lead">文档是出题的素材来源。支持 PDF / DOCX / TXT / MD 四种格式，也可以直接粘贴文本。</p>
+  <div class="shot"><img src="截图/02-文档管理.png" alt="文档管理"></div>
+  <div class="shot-cap">文档管理 · 科目管理卡片 + 拖拽导入区 + 文档列表</div>
+  <h3>导入文档</h3>
+  <ol class="steps">
+    <li>点击导入区选择文件（桌面版支持拖拽），弹窗中选择「归入科目」；</li>
+    <li>没有合适的科目？先在上方「科目管理」点「＋ 新建科目」，例如：计算机网络、数据库原理；</li>
+    <li>导入完成后列表会显示科目、大小、已出题数，随时可以点「出题」直接跳转生成页。</li>
+  </ol>
+  <h3>为什么要用科目</h3>
+  <p>文档归入科目后，由它生成的题目自动继承科目。练习、考试、错题本、复习、图谱全都支持<b>按科目筛选</b>，多科资料混在一个题库里也不会互相干扰。科目在「文档管理」和「系统设置」两处都能管理，实时联动。</p>
+  <div class="tip"><b>💡 提示</b>删除文档不会删除已生成的题目；粘贴文本建文档时内容最好多于 30 字，太少会影响出题质量。</div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <h2><span class="no">05</span>AI 生成题目</h2>
+  <p class="lead">内置 5 种题型（单选 / 多选 / 判断 / 填空 / 简答）× 三档难度，生成的每道题都附带答案、解析、知识点标签和原文出处。</p>
+  <div class="shot"><img src="截图/03-AI生成题目.png" alt="AI 生成题目"></div>
+  <div class="shot-cap">AI 生成题目 · 选文档 → 勾题型难度 → 点「生成题目」</div>
+  <h3>操作步骤</h3>
+  <ol class="steps">
+    <li>选择来源文档（或全部文档）；</li>
+    <li>勾选题型（默认单选 + 判断 + 填空），点题型区的 <b>＋</b> 可以自定义新题型，题型上的 <b>✕</b> 可删除自定义题型；</li>
+    <li>选择难度与每批题数，点「生成题目」；</li>
+    <li>生成完毕后点「去题库查看」直接检查成果。</li>
+  </ol>
+  <div class="warn"><b>⚠️ 注意</b>AI 出题会自动避重——同一文档反复生成不会大量出重复题。生成期间请保持网络可用；API 费用按各服务商计费（每批 5 题通常不足 1 分钱，以 DeepSeek 为例）。</div>
+  <h3>没有 API Key？</h3>
+  <p>可以用「本地快速出题」：从文档中抽取关键句生成填空 / 判断题，完全离线免费，适合快速建库，但题型和质量不如 AI。API 配置方法见第 14 节。</p>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <h2><span class="no">06</span>题库管理</h2>
+  <p class="lead">所有生成题目的总仓库，支持搜索、组合筛选、在线编辑、批量删除与导出。</p>
+  <div class="shot"><img src="截图/04-题库管理.png" alt="题库管理"></div>
+  <div class="shot-cap">题库管理 · 顶部搜索 + 四维筛选，每题带标签、正确率与操作按钮</div>
+  <ul>
+    <li><b>搜索</b>：输入关键词即时过滤题干 / 答案 / 解析 / 知识点；</li>
+    <li><b>筛选</b>：科目 × 文档 × 题型 × 难度四维组合；</li>
+    <li><b>编辑</b>：点「编辑」可改题干、选项、答案、解析与知识点；</li>
+    <li><b>🔁 复习</b>：把单题加入记忆曲线复习队列（见第 10 节）；</li>
+    <li><b>导出</b>：右上角「📤 导出 Word」「🖨 打印 / PDF」把筛选结果变成可打印材料。</li>
+  </ul>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <h2><span class="no">07</span>答题练习</h2>
+  <p class="lead">从题库抽题作答，客观题即时判分，简答题 AI 语义判分。</p>
+  <div class="shot"><img src="截图/07-答题练习设置.png" alt="答题练习设置"></div>
+  <div class="shot-cap">练习设置 · 科目 / 范围 / 数量 / 题型 / 优先模式</div>
+  <p>「优先练习」三种模式：<b>随机抽题</b>（默认）、<b>只练错题</b>（配合错题本）、<b>易错题优先</b>（按历史错误率排序，错的多的题先来）。</p>
+  <div class="shot"><img src="截图/08-答题界面.png" alt="答题界面"></div>
+  <div class="shot-cap">答题界面 · 题号导航 + 进度条 + 单题作答</div>
+  <ul>
+    <li>顶部题号导航：答对的变绿、答错的变红，点击可来回跳题；</li>
+    <li>键盘快捷键：<kbd>A–D</kbd> / <kbd>1–4</kbd> 选择选项，<kbd>Enter</kbd> 提交，<kbd>→</kbd> 下一题；</li>
+    <li>提交后立即显示对错与解析；简答题由 AI 判断语义是否等价（未配 Key 时改为自评）；</li>
+    <li>答错的题自动收入「错题本」；开启「练习答错自动入队」后还会自动加入复习队列。</li>
+  </ul>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8">
+  <h2><span class="no">08</span>模拟考试与组卷导出</h2>
+  <p class="lead">按条件组卷、限时答题、统一批改、生成成绩报告；还能把同一套组卷条件直接导出成可打印的 Word / PDF 试卷。</p>
+  <div class="shot"><img src="截图/09-模拟考试组卷.png" alt="模拟考试组卷"></div>
+  <div class="shot-cap">组卷并开始考试 · 名称 / 科目 / 知识点 / 题型 / 难度 / 题数 / 分值 / 时长，实时显示「匹配 N 题 · 满分 X 分」</div>
+  <h3>考试流程</h3>
+  <ol class="steps">
+    <li>设定组卷条件与各题型分值，点「▶ 开始考试」；</li>
+    <li>顶部倒计时（最后 5 分钟变红，到点自动交卷），下方答题卡显示已答 / 未答 / 标记待定；</li>
+    <li>交卷后统一批改：客观题自动判分，简答题 AI 判分或自评；</li>
+    <li>错题自动进错题本，成绩写入历史并计入统计。</li>
+  </ol>
+  <div class="warn"><b>⚠️ 注意</b>考试期间不显示答案与解析（和练习的即时判分模式互补），避免边做边对。</div>
+  <div class="shot"><img src="截图/17-成绩报告.png" alt="成绩报告"></div>
+  <div class="shot-cap">成绩报告 · 总分 / 用时 / 分题型·分难度得分 / 逐题回顾，可导出成绩单</div>
+  <p>「考试历史」里可以回看每份报告、查看成绩趋势图、导出成绩单 HTML。</p>
+  <h3>组卷导出（Word / PDF 试卷）</h3>
+  <div class="shot"><img src="截图/18-组卷导出.png" alt="组卷导出"></div>
+  <div class="shot-cap">组卷导出 · 用与「开始考试」完全相同的组卷条件直接出卷</div>
+  <table>
+    <tr><th>选项</th><th>可选拼合</th></tr>
+    <tr><td>纸张</td><td>A4 单栏 / A3 两栏（标准试卷版式）</td></tr>
+    <tr><td>卷种</td><td>学生卷（只有题目和作答空间）/ 教师卷（带答案、解析、分值）</td></tr>
+    <tr><td>格式</td><td>Word 文档（.docx）/ PDF</td></tr>
+  </table>
+  <p>试卷抬头自动包含科目、考试名称、时长、满分与姓名 / 班级 / 学号填写栏；填空与简答题自动预留作答空行。导出前可点「👁 预览试卷」先看排版。</p>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="s9">
+  <h2><span class="no">09</span>错题本</h2>
+  <p class="lead">练习和考试中做错的题自动收录，支持重练、写笔记、一键全部加入复习队列。</p>
+  <div class="shot"><img src="截图/10-错题本.png" alt="错题本"></div>
+  <div class="shot-cap">错题本 · 每条错题记录你的错误答案、正确答案与错因</div>
+  <ul>
+    <li>重练答对后自动移出错题本（可在系统设置关闭）；</li>
+    <li>可给错题写<b>错题笔记</b>，笔记会同步汇总到「知识库」（见第 13 节）；</li>
+    <li>「全部加入复习」把所有错题塞进记忆曲线队列，考前冲刺利器。</li>
+  </ul>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <h2><span class="no">10</span>间隔复习（SM-2 记忆曲线）</h2>
+  <p class="lead">把题目变成记忆卡片，按遗忘曲线自动排期，用最少的重复次数把知识刻进长期记忆。</p>
+  <div class="shot"><img src="截图/11-间隔复习.png" alt="间隔复习"></div>
+  <div class="shot-cap">间隔复习 · 今日队列 + 14 天到期预告 + 掌握阶段分布</div>
+  <h3>怎么用</h3>
+  <ol class="steps">
+    <li><b>加卡</b>：题库里点「🔁 复习」、错题本「全部加入」，或开启「练习答错自动入队」让错题自动进来；</li>
+    <li><b>每日队列</b>：系统只把「到期卡 + 受每日上限控制的新卡」放进今天，避免一上来几百张；</li>
+    <li><b>复习</b>：点「开始今日复习」进入卡片模式——<kbd>空格</kbd> 显示答案，然后按记忆情况自评：</li>
+  </ol>
+  <table>
+    <tr><th>评分</th><th>快捷键</th><th>效果</th></tr>
+    <tr><td>忘记</td><td><kbd>1</kbd></td><td>轮次清零，10 分钟后在本轮重现</td></tr>
+    <tr><td>困难</td><td><kbd>2</kbd></td><td>间隔微调缩短（上次间隔 × 因子 × 0.6）</td></tr>
+    <tr><td>良好</td><td><kbd>3</kbd></td><td>正常推进（1 天 → 3 天 → 之后按因子递增）</td></tr>
+    <tr><td>简单</td><td><kbd>4</kbd></td><td>加速推进（4 天 → 8 天 → 更长），<kbd>Esc</kbd> 退出</td></tr>
+  </table>
+  <p>每个按钮上会预览「多久后再来」。间隔满 21 天的卡片自动标记为「已掌握」。柱状图显示未来 14 天每天到期的卡量，方便提前调剂、避免某天爆仓。</p>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <h2><span class="no">11</span>统计分析</h2>
+  <p class="lead">练习数据一览：正确率分布、近 7 天练习量，找出薄弱题型。</p>
+  <div class="shot"><img src="截图/12-统计分析.png" alt="统计分析"></div>
+  <div class="shot-cap">统计分析 · 累计练习 / 答对题数 / 总正确率 / 分题型·分难度正确率 / 近 7 天练习量</div>
+  <p>哪类题型正确率低就重点补哪类——回到练习页用「题型筛选 + 易错题优先」定向加练即可。</p>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <h2><span class="no">12</span>知识点图谱</h2>
+  <p class="lead">所有题目按知识点聚合成一颗可拖转的 3D「知识星球」，关系近的知识点自动聚成一簇，薄弱点一目了然。</p>
+  <div class="shot"><img src="截图/05-知识点图谱.png" alt="知识点图谱"></div>
+  <div class="shot-cap">知识点图谱 · 拖动旋转 / 滚轮缩放 / 悬停高亮 / 单击看题 / 双击聚焦</div>
+  <table>
+    <tr><th>操作</th><th>效果</th></tr>
+    <tr><td>拖动</td><td>旋转球体（松手带惯性），空闲时自动缓慢自转</td></tr>
+    <tr><td>滚轮</td><td>缩放（50% ~ 320%）</td></tr>
+    <tr><td>悬停</td><td>节点高亮并显示名称</td></tr>
+    <tr><td>单击</td><td>选中知识点，下方展开题目列表，球体自动把它转到正面</td></tr>
+    <tr><td>双击</td><td>聚焦放大该知识点</td></tr>
+  </table>
+  <p>节点颜色 = 掌握度（≥80% 绿 / 60–79% 橙 / &lt;60% 红 / 灰 = 未练习）。下方「薄弱 Top5」「尚未练习 Top5」点击即可定位并一键专项练习；顶部还能勾选只看双链、同章节或「有笔记」的知识点。有笔记的节点带琥珀色光点，点击详情卡可直接查看 / 编辑笔记。</p>
+  <div class="tip"><b>💡 提示</b>知识点标签由 AI 出题时自动生成，也可以在题库编辑里手动修改；「AI 批量补全标签」可以给没有知识点的旧题批量打标。</div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section id="s13">
+  <h2><span class="no">13</span>知识库与联网查询</h2>
+  <p class="lead">四类内容统一沉淀：知识点笔记、错题笔记、自由手记、联网查询收藏。</p>
+  <div class="shot"><img src="截图/06-知识库.png" alt="知识库"></div>
+  <div class="shot-cap">知识库 · 分类统计 + 全文搜索 + 四类筛选，每条笔记可一键跳回对应页面</div>
+  <ul>
+    <li><b>📝 知识点笔记</b>：在图谱详情卡里写，与图谱实时联动；</li>
+    <li><b>📕 错题笔记</b>：在错题本里给错题写备注；</li>
+    <li><b>🗒 知识库手记</b>：本页直接新建，可关联知识点；</li>
+    <li><b>⭐ 查询收藏</b>：联网查询时收藏的网页结果与 AI 问答，可「🔍 再查」「📝 转笔记」。</li>
+  </ul>
+
+  <h3>联网查询：不懂就搜，搜完就存</h3>
+  <p>点知识库页的「🔍 联网查询」（或在图谱 / 练习里划选字词后点放大镜图标），弹出双栏面板：</p>
+  <div class="shot"><img src="截图/15-联网查询搜索.png" alt="联网查询搜索"></div>
+  <div class="shot-cap">联网查询 · 左栏网页结果（打开原文 / 复制链接 / 存笔记 / 收藏），右栏 AI 解答</div>
+  <ul>
+    <li>支持 4 个搜索引擎 + <b>智能聚合</b>（三路并发、交替去重），被拦截时自动换引擎；</li>
+    <li>输入时自动弹出<b>搜索联想词</b>（↑↓ 选择，回车搜索）；</li>
+    <li>每条结果可「⭐ 收藏」进收藏夹（收藏夹就在知识库里）；</li>
+  </ul>
+  <div class="shot"><img src="截图/16-联网查询AI对话.png" alt="AI 连续追问"></div>
+  <div class="shot-cap">AI 解答 · 参考网页摘要讲解，可在下方输入框连续追问</div>
+  <ul>
+    <li>点「🤖 AI 解答」，AI 会结合左栏网页摘要用通俗的话讲清概念，避免瞎编；</li>
+    <li>答完后在底部输入框<b>继续追问</b>，AI 记得前面聊过什么，多轮深挖；</li>
+    <li>满意就点「💾 存进知识库」或「⭐ 收藏回答」，不想要直接关掉面板。</li>
+  </ul>
+  <div class="warn"><b>⚠️ 注意</b>联网搜索需要<b>桌面版 v1.36.0+</b>（主进程抓取，不受浏览器跨域限制）；网页版会自动降级为打开浏览器搜索页，AI 解答不受影响。</div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section id="s14">
+  <h2><span class="no">14</span>系统设置</h2>
+  <p class="lead">AI 接口、主题外观、练习与复习策略、题目类型、数据管理都在这里。</p>
+  <div class="shot"><img src="截图/13-系统设置.png" alt="系统设置"></div>
+  <div class="shot-cap">系统设置 · 全部配置项集中管理</div>
+  <h3>AI 接口配置（一次配好，处处可用）</h3>
+  <p>支持任意 OpenAI 兼容接口，常用服务商直接照抄：</p>
+  <table>
+    <tr><th>服务商</th><th>Base URL</th><th>模型</th></tr>
+    <tr><td>DeepSeek</td><td><code>https://api.deepseek.com/v1</code></td><td><code>deepseek-chat</code></td></tr>
+    <tr><td>Kimi</td><td><code>https://api.moonshot.cn/v1</code></td><td><code>moonshot-v1-8k</code></td></tr>
+    <tr><td>智谱 GLM</td><td><code>https://open.bigmodel.cn/api/paas/v4</code></td><td><code>glm-4-flash</code></td></tr>
+    <tr><td>通义千问</td><td><code>https://dashscope.aliyuncs.com/compatible-mode/v1</code></td><td><code>qwen-plus</code></td></tr>
+    <tr><td>OpenAI</td><td><code>https://api.openai.com/v1</code></td><td><code>gpt-4o-mini</code></td></tr>
+  </table>
+  <h3>其它常用设置</h3>
+  <ul>
+    <li><b>主题</b>：默认浅色 / 护眼豆沙绿 / 羊皮纸 / 米白亚麻 / 浅灰蓝 / 深夜模式；</li>
+    <li><b>判分方式</b>：AI 语义判分或手动自评；「重练答对自动移出错题本」；</li>
+    <li><b>复习上限</b>：每日新卡上限 / 每日复习上限，防止任务过重；</li>
+    <li><b>题目类型管理</b>：自定义题型增删（与出题页实时同步）；</li>
+    <li><b>数据管理</b>：查看数据文件位置、修改存放路径（指到同步盘即可多机同步）、恢复默认位置。</li>
+  </ul>
+  <div class="tip"><b>💡 数据备份</b>桌面版数据默认在 <code>%APPDATA%\moni-tiku\data.json</code>，是个单文件 JSON——复制这个文件就是完整备份。「数据 → 打开数据文件夹」可直接定位。</div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section id="s15">
+  <h2><span class="no">15</span>更新与常见问题</h2>
+  <h3>软件更新（安装版）</h3>
+  <p>点左侧「系统设置 → 软件更新 → 检查更新」（启动时也会自动静默检查）。软件会<b>串行测速 5 条下载线路并自动选最快的一条</b>：</p>
+  <ol class="steps">
+    <li>发现新版本 → 询问是否下载，确认后才开始（带进度条，下载中可继续使用软件）；</li>
+    <li>下载完成 → 询问是否安装；</li>
+    <li>确认后程序退出 → 静默覆盖旧版 → 自动重启，数据完好无损。</li>
+  </ol>
+  <div class="warn"><b>⚠️ 注意</b>便携版不支持在线更新（技术限制），请到 Releases 下载新版替换文件。</div>
+
+  <h3>常见问题</h3>
+  <table>
+    <tr><th>问题</th><th>解决</th></tr>
+    <tr><td>AI 出题报错 / 超时</td><td>检查 API Key 与 Base URL 是否填对、账户是否有余额；测试连通性后重试</td></tr>
+    <tr><td>PDF 导入失败（网页版）</td><td>网页版解析库从 CDN 加载，需联网；桌面版本地解析无此问题</td></tr>
+    <tr><td>联网查询没有结果</td><td>确认桌面版为 v1.36.0+；搜索引擎被拦截时软件会自动换引擎重试，也可手动切换引擎</td></tr>
+    <tr><td>简答题判分不准</td><td>判分依赖 AI，请在设置里确认「判分方式 = AI 语义判分」且 Key 有效</td></tr>
+    <tr><td>想换电脑 / 多机同步</td><td>「系统设置 → 数据管理」把数据路径指到同步盘目录，或直接拷贝 data.json</td></tr>
+    <tr><td>考试中途误关软件</td><td>重新进入「模拟考试」可继续未完成的考试</td></tr>
+  </table>
+
+  <h3>更多资源</h3>
+  <ul>
+    <li>软件内置「帮助手册」（左侧导航最后一项），与本教程同步更新；</li>
+    <li>问题反馈与源码：GitCode / GitHub / Gitee 搜索 <code>moni-tiku</code>。</li>
+  </ul>
+</section>
+
+<footer>模拟题库 · 图文使用教程 v1.38.0 · 本教程截图基于软件真实界面制作 · 可直接打印或另存为 PDF</footer>
+
+</main>
+</div>
+</body>
+</html>
