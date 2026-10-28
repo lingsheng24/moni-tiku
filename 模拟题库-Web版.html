@@ -333,6 +333,30 @@ body.is-desktop .ws-mask{top:36px}
 .ws-res-ft{display:flex;gap:6px;margin-top:6px}
 .ws-res-ft button{padding:2px 8px;font-size:11.5px}
 .ws-ai{font-size:13.5px;line-height:1.85;white-space:pre-wrap;word-break:break-word}
+/* ---------- 联网查询 v1.38.0：AI 追问气泡 / 搜索联想 / 收藏夹 ---------- */
+.ws-head{position:relative}
+.ws-sug{position:absolute;z-index:9;background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  box-shadow:0 10px 28px rgba(0,0,0,.22);overflow:hidden;display:none;max-height:280px;overflow-y:auto}
+.ws-sug.open{display:block}
+.ws-sug-i{padding:7px 12px;font-size:13px;cursor:pointer;display:flex;gap:8px;align-items:center;transition:.12s}
+.ws-sug-i .ico{color:var(--muted);font-size:12px;flex:none}
+.ws-sug-i:hover,.ws-sug-i.on{background:var(--panel2);color:var(--primary)}
+.ws-msg{padding:8px 11px;border-radius:10px;margin-bottom:8px;font-size:13px;line-height:1.8;
+  white-space:pre-wrap;word-break:break-word}
+.ws-msg.user{background:var(--panel2);border:1px solid var(--border);margin-left:26px}
+.ws-msg.ai{background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--primary);margin-right:10px}
+.ws-msg .ws-msg-op{display:flex;gap:6px;margin-top:6px}
+.ws-msg .ws-msg-op button{padding:2px 8px;font-size:11px}
+.ws-ai-in{display:flex;gap:6px;padding:8px 14px 10px;border-top:1px dashed var(--border)}
+.ws-ai-in input{flex:1;min-width:0}
+.ws-fav-i{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border);
+  border-radius:9px;background:var(--panel2);font-size:12.5px}
+.ws-fav-i .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-fav-i .t:hover{color:var(--primary)}
+.ws-fav-i .d{color:var(--muted);font-size:11px;white-space:nowrap;flex:none}
+.ws-fav-i .op{display:flex;gap:4px;flex:none}
+.ws-fav-i .op button{padding:2px 7px;font-size:11px}
+.ws-fav-badge{background:var(--primary);color:#fff;border-radius:8px;padding:0 5px;font-size:10.5px;margin-left:2px}
 .ws-empty{color:var(--muted);font-size:12.5px;line-height:1.9;padding:8px 2px}
 .ws-hist{display:flex;flex-direction:column;gap:6px}
 .ws-hist-i{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);
@@ -590,7 +614,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.37.1';
+const APP_VER = '1.38.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -678,12 +702,13 @@ const state = {
     navOrder: [],           // 导航栏项目排序（拖动生成；空数组 = 默认顺序）
     closeAction: 'tray',    // 桌面版：点关闭按钮的行为（tray=最小化到托盘 / quit=直接退出）
     kpNoteOnly: 0,          // v1.35.0：知识点图谱只看有笔记的知识点
-    searchEngine: 'bingcn', // v1.36.0：联网查询默认引擎（bingcn=Bing 国内 / bing=Bing 国际）
+    searchEngine: 'bingcn', // v1.36.0：联网查询默认引擎（v1.38.0 扩为 bingcn/bing/sogou/so360/aggregate）
   },
   docs: [], questions: [], mistakes: [], practice: [], exams: [], reviews: [],
   kpNotes: {},              // 知识点笔记：{ [知识点名]: { text, at } }（随全局 kv，兼容历史数据）
   kbNotes: [],              // v1.35.0：知识库手记 [{ id, kp, text, at, updatedAt }]（随题库隔离）
   kbSearchHist: [],         // v1.36.0：联网查询历史 [{ q, at, engine, kp }]（随题库隔离，最多 30 条）
+  wsFavs: [],               // v1.38.0：联网查询收藏 [{ id, q, kp, engine, kind, title, url, snippet, ai, at }]（随题库隔离，最多 100 条）
   genCount: 5,              // 运行态镜像：出题页「每批题数」，与 settings.genCount 同步
   bankId: 'default',        // v1.31.0：当前题库 id（桌面版多题库；网页版恒为 default）
   banks: [],                // v1.31.0：题库列表 [{id,name,createdAt,counts}]（桌面版从主进程读）
@@ -1561,6 +1586,7 @@ async function refreshData() {
   state.kpNotes = (await DB.kvGet('kpNotes')) || {};   // 知识点笔记：{ [知识点名]: { text, at } }
   state.kbNotes = (DB.bkvGet ? await DB.bkvGet('kbNotes') : null) || [];   // v1.35.0：知识库手记（随题库隔离）
   state.kbSearchHist = (DB.bkvGet ? await DB.bkvGet('kbSearchHist') : null) || [];   // v1.36.0：联网查询历史
+  state.wsFavs = (DB.bkvGet ? await DB.bkvGet('wsFavs') : null) || [];   // v1.38.0：联网查询收藏（随题库隔离）
   kbNoteCountsRefresh();   // v1.35.0：图谱节点上的「有笔记」角标数据
   buildDocSubjectMap();   // 文档→科目映射（题目回推用）
   kpDocCacheClear();      // 文档内容可能变了：清掉章节解析缓存（v1.25.0）
@@ -4417,14 +4443,18 @@ async function kbDeleteNote(key) {
  * 桌面版由主进程抓取 Bing 结果页并解析，渲染层画成卡片；
  * 「AI 解答」把搜索结果摘要作为参考资料交给模型综合讲解，避免凭空编造。
  * 两种内容都能一键整理成笔记存进知识库（可选关联知识点）。 */
-const WS_ENGINES = { bingcn: 'Bing 国内', bing: 'Bing 国际' };
+const WS_ENGINES = { bingcn: 'Bing 国内', bing: 'Bing 国际', sogou: '搜狗', so360: '360 搜索', aggregate: '智能聚合' };
 const WS_HIST_MAX = 30;
+const WS_FAV_MAX = 100;   // v1.38.0：收藏上限（超出自动淘汰最旧的）
 let wsState = null;
 
 function wsEngineName(id) { return WS_ENGINES[id] || WS_ENGINES.bingcn; }
 function wsSearchUrl(q, engine) {
-  const base = engine === 'bing' ? 'https://www.bing.com/search?q=' : 'https://cn.bing.com/search?q=';
-  return base + encodeURIComponent(q) + '&setlang=zh-CN';
+  const e = encodeURIComponent(q);
+  if (engine === 'sogou') return 'https://www.sogou.com/web?query=' + e;
+  if (engine === 'so360') return 'https://www.so.com/s?q=' + e;
+  if (engine === 'bing') return 'https://www.bing.com/search?q=' + e + '&setlang=zh-CN';
+  return 'https://cn.bing.com/search?q=' + e + '&setlang=zh-CN&ensearch=0';
 }
 /* ================= 划词工具条（v1.37.0） =================
  * 在正文里选中字 / 词 / 句，浮出「🔍 查询」「📝 笔记」两个按钮：
@@ -4565,23 +4595,24 @@ function wsNowText() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function wsOpen(q = '', kp = '') {
-  const engine = state.settings.searchEngine === 'bing' ? 'bing' : 'bingcn';
+  const engine = WS_ENGINES[state.settings.searchEngine] ? state.settings.searchEngine : 'bingcn';
   wsState = { q: String(q || '').trim(), kp: String(kp || '').trim(), engine, results: [], ai: '', aiBusy: false,
-    loading: false, err: '', aiErr: '', searchUrl: '', at: 0 };
+    aiMsgs: [], loading: false, err: '', aiErr: '', searchUrl: '', at: 0,
+    sugs: [], sugOpen: false, sugIdx: -1, sugTimer: 0, sugLastQ: '' };
   const el = document.createElement('div');
   el.className = 'ws-mask';
   el.id = 'wsMask';
+  const engOpts = Object.keys(WS_ENGINES).map(k =>
+    `<option value="${k}"${k === engine ? ' selected' : ''}>${WS_ENGINES[k]}</option>`).join('');
   el.innerHTML = `
   <div class="ws-panel" role="dialog" aria-label="联网查询">
     <div class="ws-head">
       <span class="ws-title">🔍 联网查询</span>
       <input id="wsQ" placeholder="输入不懂的知识点 / 问题，回车搜索…" value="${esc(wsState.q)}" autocomplete="off">
-      <select id="wsEngine" title="搜索引擎">
-        <option value="bingcn">Bing 国内</option>
-        <option value="bing">Bing 国际</option>
-      </select>
+      <div id="wsSug" class="ws-sug"></div>
+      <select id="wsEngine" title="搜索引擎（被拦截时会自动换其它引擎）">${engOpts}</select>
       <button class="primary" onclick="wsRun()">搜索</button>
-      <button class="ghost" onclick="wsAskAI()">🤖 AI 解答</button>
+      <button class="ghost" onclick="wsAskAI()" title="让 AI 结合网页摘要讲解">🤖 AI 解答</button>
       <span style="flex:1"></span>
       <button class="primary" onclick="wsSaveNote()">💾 存进知识库</button>
       <button class="ghost" onclick="wsClose()" title="关闭（Esc）">✕</button>
@@ -4594,28 +4625,52 @@ function wsOpen(q = '', kp = '') {
       <div class="ws-col">
         <div class="ws-col-hd">🤖 AI 解答 <span id="wsAiHint" style="color:var(--muted);font-weight:400"></span>
           <span style="flex:1"></span>
-          <button class="sm ghost" onclick="wsAskAI()" title="重新生成">↻ 重答</button>
+          <button class="sm ghost" onclick="wsFavAddAI()" title="把最近一轮问答收进收藏夹">⭐ 收藏回答</button>
+          <button class="sm ghost" onclick="wsAskAI()" title="清空对话，重新生成第一答">↻ 重答</button>
         </div>
         <div class="ws-col-bd"><div class="ws-ai" id="wsAiBox"></div></div>
+        <div class="ws-ai-in">
+          <input id="wsAiIn" placeholder="就着结果继续追问…（Enter 发送，如「它和动量定理什么关系」）">
+          <button class="primary" onclick="wsAskAIFromInput()">发送</button>
+        </div>
       </div>
     </div>
     <div class="ws-foot">
       <span class="hint" id="wsHint">结果来自${wsEngineName(engine)}；AI 会参考这些网页摘要来讲解。想留下就点「💾 存进知识库」，不想保留直接关掉即可</span>
       <span style="flex:1"></span>
+      <button class="ghost" onclick="wsFavToggle()" id="wsFavBtn">⭐ 收藏夹<span class="ws-fav-badge" id="wsFavCnt">${(state.wsFavs || []).length}</span></button>
       <button class="ghost" onclick="wsHistToggle()" id="wsHistBtn">🕘 最近查询</button>
       ${wsState.kp ? `<span class="pill amber">关联知识点：${esc(wsState.kp)}</span>` : ''}
     </div>
     <div id="wsHistWrap" class="hidden" style="padding:0 18px 12px"></div>
+    <div id="wsFavWrap" class="hidden" style="padding:0 18px 12px;max-height:38vh;overflow:auto"></div>
   </div>`;
   document.body.appendChild(el);
   el.addEventListener('click', e => { if (e.target === el) wsClose(); });
   const sel = document.getElementById('wsEngine');
   if (sel) {
     sel.value = engine;
-    sel.onchange = () => { wsState.engine = sel.value; state.settings.searchEngine = sel.value; DB.kvSet('settings', state.settings); };
+    sel.onchange = () => { wsState.engine = sel.value; state.settings.searchEngine = sel.value; DB.kvSet('settings', state.settings); wsRenderResults(); };
   }
   const inp = document.getElementById('wsQ');
-  if (inp) inp.onkeydown = e => { if (e.key === 'Enter') wsRun(); };
+  if (inp) {
+    inp.onkeydown = e => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { wsSugNav(e.key === 'ArrowDown' ? 1 : -1); e.preventDefault(); return; }
+      if (e.key === 'Enter') {
+        /* 联想列表开着且选中了某条 → 搜那条；否则搜输入框原文 */
+        if (wsState.sugOpen && wsState.sugIdx >= 0 && wsState.sugs[wsState.sugIdx]) {
+          inp.value = wsState.sugs[wsState.sugIdx];
+        }
+        wsSugClose(); wsRun();
+        return;
+      }
+      if (e.key === 'Escape') wsSugClose();
+    };
+    inp.oninput = () => wsSugInput();
+    inp.onblur = () => setTimeout(() => wsSugClose(), 180);   // 延迟收起，别挡住点击联想词
+  }
+  const aiIn = document.getElementById('wsAiIn');
+  if (aiIn) aiIn.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); wsAskAIFromInput(); } };
   document.addEventListener('keydown', wsEscHandler);
   wsRenderResults(); wsRenderAI(); wsRenderHist();
   if (wsState.q) wsRun(); else setTimeout(() => { try { inp && inp.focus(); } catch (e) { } }, 30);
@@ -4623,6 +4678,7 @@ function wsOpen(q = '', kp = '') {
 function wsEscHandler(e) {
   if (e.key !== 'Escape' || !wsState) return;
   if (document.querySelector('.modal-mask')) return;   // 保存笔记弹窗开着时先关弹窗
+  if (wsState.sugOpen) { wsSugClose(); return; }       // 联想列表开着时先只收起联想
   wsClose();
 }
 function wsClose() {
@@ -4636,7 +4692,9 @@ async function wsRun() {
   if (!wsState) return;
   const q = (document.getElementById('wsQ')?.value || '').trim();
   if (!q) { toast('先输入要查询的内容', 'err'); return; }
-  wsState.q = q; wsState.results = []; wsState.err = ''; wsState.loading = true; wsState.ai = ''; wsState.aiErr = '';
+  wsSugClose();
+  wsState.q = q; wsState.results = []; wsState.err = ''; wsState.loading = true;
+  wsState.ai = ''; wsState.aiErr = ''; wsState.aiMsgs = [];   // 新搜索 = 新对话
   wsRenderResults(); wsRenderAI();
   const canFetch = IS_DESKTOP && window.electronAPI && typeof window.electronAPI.webSearch === 'function';
   if (!canFetch) {
@@ -4654,6 +4712,7 @@ async function wsRun() {
   }
   try {
     const r = await window.electronAPI.webSearch({ q, engine: wsState.engine });
+    if (!wsState) return;   // 等待期间面板被关掉（Esc / ✕），放弃后续渲染
     wsState.loading = false;
     wsState.results = Array.isArray(r && r.results) ? r.results : [];
     wsState.searchUrl = (r && r.searchUrl) || wsSearchUrl(q, wsState.engine);
@@ -4664,9 +4723,11 @@ async function wsRun() {
       wsPushHist(q);
     }
   } catch (e) {
+    if (!wsState) return;
     wsState.loading = false;
     wsState.err = '联网查询失败：' + String(e && e.message || e);
   }
+  if (!wsState) return;
   wsRenderResults();
   /* 有结果且配了 AI 接口 → 自动让 AI 结合摘要整理一份讲解，省一步操作 */
   if (wsState.results.length && state.settings.apiKey && state.settings.searchAutoAI !== 0) wsAskAI(true);
@@ -4735,52 +4796,109 @@ function wsRenderResults() {
         <button class="ghost" data-u="${esc(r.url)}" onclick="wsOpenLink(this.dataset.u)">打开原文</button>
         <button class="ghost" data-u="${esc(r.url)}" onclick="wsCopy(this.dataset.u)">复制链接</button>
         <button class="ghost" data-i="${i}" onclick="wsUseAsNote(+this.dataset.i)" title="把这条结果的标题、摘要和链接存成笔记">💾 存这条</button>
+        <button class="ghost" data-i="${i}" onclick="wsFavAddResult(+this.dataset.i)" title="收进收藏夹，随时回看">⭐ 收藏</button>
       </div>
     </div>`).join('');
 }
 function wsRenderAI() {
   const box = document.getElementById('wsAiBox');
   if (!box || !wsState) return;
+  const s = wsState;
   const hint = document.getElementById('wsAiHint');
-  if (hint) hint.textContent = wsState.aiBusy ? '（生成中…）' : '';
-  if (wsState.aiErr) { box.innerHTML = `<div class="ws-empty">⚠️ ${esc(wsState.aiErr)}</div>`; return; }
-  if (wsState.ai) { box.textContent = wsState.ai; return; }
-  if (wsState.aiBusy) { box.innerHTML = '<div class="ws-empty">⏳ AI 正在结合搜索结果整理讲解…</div>'; return; }
-  box.innerHTML = `<div class="ws-empty">${state.settings.apiKey
-    ? '点「🤖 AI 解答」让 AI 用通俗的话讲清这个概念（会参考左侧网页摘要，避免瞎编）。'
-    : '还没配置 AI 接口 —— 到「系统设置 → AI 接口」填 API Key 后就能在这里直接得到讲解。'}</div>`;
+  const turns = (s.aiMsgs || []).length;
+  if (hint) hint.textContent = s.aiBusy ? '（生成中…）' : (turns ? `（${Math.ceil(turns / 2)} 轮对话）` : '');
+  if (s.aiErr && !(s.aiMsgs || []).length) { box.innerHTML = `<div class="ws-empty">⚠️ ${esc(s.aiErr)}</div>`; return; }
+  const msgs = s.aiMsgs || [];
+  if (!msgs.length) {
+    if (s.aiErr) { box.innerHTML = `<div class="ws-empty">⚠️ ${esc(s.aiErr)}</div>`; return; }
+    box.innerHTML = `<div class="ws-empty">${state.settings.apiKey
+      ? '点「🤖 AI 解答」让 AI 用通俗的话讲清这个概念（会参考左侧网页摘要，避免瞎编）。\n答完后在下方输入框可以继续追问，AI 记得前面聊过什么。'
+      : '还没配置 AI 接口 —— 到「系统设置 → AI 接口」填 API Key 后就能在这里直接得到讲解。'}</div>`;
+    return;
+  }
+  /* 逐条渲染气泡；流式中最后一条 assistant 还没内容时显示生成中 */
+  box.innerHTML = msgs.map((m, i) => {
+    if (m.role === 'user') {
+      return `<div class="ws-msg user">${esc(m.content.length > 500 ? m.content.slice(0, 500) + '…' : m.content)}</div>`;
+    }
+    const generating = s.aiBusy && i === msgs.length - 1 && !m.content;
+    const op = (!s.aiBusy && i === msgs.length - 1 && m.content)
+      ? `<div class="ws-msg-op"><button class="ghost" onclick="wsSaveNote()">💾 本轮问答存进知识库</button></div>` : '';
+    return `<div class="ws-msg ai">${generating ? '⏳ AI 正在结合搜索结果整理讲解…' : esc(m.content)}${op}</div>`;
+  }).join('') + (s.aiErr ? `<div class="ws-empty">⚠️ ${esc(s.aiErr)}</div>` : '');
+  box.scrollTop = box.scrollHeight;   // 追问后自动滚到底
 }
-/** AI 综合解答：把左侧网页摘要作为参考资料一起发过去 */
-async function wsAskAI(auto = false) {
+/** AI 问答（v1.38.0 多轮对话）：第一问带网页摘要作参考，之后可连续追问，历史一起发给模型 */
+function wsAiMessages() {
+  const s = wsState;
+  const system = '你是一位严谨、讲人话的中文学习助教。讲解知识点时：先用一句话给结论或定义，再分点讲清要点、成立条件、易错点，必要时给一个最小例子或记忆方法。' +
+    '如果给了「网页摘要参考」，以它为主要依据；摘要不足以支撑时明确写「以下为通用知识」。' +
+    '不要编造文献、页码、链接或数据。单次回答控制在 400 字以内，可用短标题和序号，不要用 Markdown 星号强调。';
+  const msgs = [{ role: 'system', content: system }];
+  const hist = (s.aiMsgs || []).filter(m => m.role === 'user' || (m.role === 'assistant' && m.content));
+  return msgs.concat(hist.map(m => ({ role: m.role, content: m.content })));
+}
+async function wsAskAI(text, auto = false) {
   if (!wsState || wsState.aiBusy) return;
-  const q = wsState.q || (document.getElementById('wsQ')?.value || '').trim();
-  if (!q) { toast('先输入要查询的内容', 'err'); return; }
+  const s = wsState;
+  /* 「↻ 重答」：没传 text 且已有对话 → 清空重新生成第一答 */
+  if (!String(text || '').trim() && (s.aiMsgs || []).length) {
+    s.aiMsgs = []; s.ai = ''; s.aiErr = '';
+  }
+  const ask = String(text || '').trim() || s.q;
+  if (!ask) { toast('先输入要查询的内容', 'err'); return; }
   if (!state.settings.apiKey) {
-    wsState.aiErr = '还没配置 AI 接口（系统设置 → AI 接口）。先看左侧网页结果，或点「在浏览器中打开搜索页」。';
+    s.aiErr = '还没配置 AI 接口（系统设置 → AI 接口）。先看左侧网页结果，或点「在浏览器中打开搜索页」。';
     wsRenderAI();
     return;
   }
-  wsState.aiBusy = true; wsState.ai = ''; wsState.aiErr = '';
-  wsRenderAI();
-  const ctx = wsState.results.slice(0, 5).map((r, i) =>
+  s.aiBusy = true; s.aiErr = '';
+  /* 首问固定以面板查询词为主体（「AI 解答」按钮/自动解答都走这里）；追问直接入历史 */
+  const isFirst = !(s.aiMsgs || []).length;
+  const ctx = s.results.slice(0, 5).map((r, i) =>
     `${i + 1}. ${r.title}（${r.site || ''}）\n${(r.snippet || '').slice(0, 300)}`).join('\n');
-  const messages = [
-    {
-      role: 'system',
-      content: '你是一位严谨、讲人话的中文学习助教。讲解知识点时：先用一句话给结论或定义，再分点讲清要点、成立条件、易错点，必要时给一个最小例子或记忆方法。' +
-        '如果给了「网页摘要参考」，以它为主要依据；摘要不足以支撑时明确写「以下为通用知识」。' +
-        '不要编造文献、页码、链接或数据。总长控制在 400 字以内，可用短标题和序号，不要用 Markdown 星号强调。',
-    },
-    { role: 'user', content: `请讲解：${q}` + (ctx ? `\n\n【网页摘要参考】\n${ctx}` : '') },
-  ];
+  const content = isFirst
+    ? `请讲解：${s.q}` + (ctx ? `\n\n【网页摘要参考】\n${ctx}` : '')
+    : ask;
+  if (!s.aiMsgs) s.aiMsgs = [];
+  s.aiMsgs.push({ role: 'user', content });
+  const userMsg = s.aiMsgs[s.aiMsgs.length - 1];
+  const reply = { role: 'assistant', content: '' };
+  s.aiMsgs.push(reply);
+  wsRenderAI();
+  const input = document.getElementById('wsAiIn');
+  if (input) input.value = '';
   let acc = '';
   try {
-    const text = await chat(messages, false, d => { acc += d; if (wsState) { wsState.ai = acc; wsRenderAI(); } });
-    if (wsState) wsState.ai = (text || acc || '').trim();
+    /* wsAiMessages 已过滤流式空占位，直接发全量历史 */
+    const messages = wsAiMessages();
+    const full = await chat(messages, false, d => {
+      acc += d;
+      reply.content = acc;
+      if (wsState) { s.ai = acc; wsRenderAI(); }
+    });
+    reply.content = (full || acc || '').trim();
+    if (wsState) s.ai = reply.content;
   } catch (e) {
-    if (wsState) wsState.aiErr = 'AI 解答失败：' + String(e && e.message || e) + (auto ? '（可点「↻ 重答」再试）' : '');
+    /* 失败：整个未完成回合回滚（问与空答都移除），重试时仍是干净的首问 */
+    if (wsState) {
+      s.aiMsgs = s.aiMsgs.filter(m => m !== reply && m !== userMsg);
+      s.aiErr = 'AI 解答失败：' + String(e && e.message || e) + (auto ? '（可点「↻ 重答」再试）' : '（可直接重发）');
+    }
   }
-  if (wsState) { wsState.aiBusy = false; wsRenderAI(); }
+  if (wsState) { s.aiBusy = false; wsRenderAI(); }
+}
+/** 右栏底部输入框发出的追问 */
+function wsAskAIFromInput() {
+  if (!wsState) return;
+  const v = (document.getElementById('wsAiIn')?.value || '').trim();
+  if (!v) { toast('输入想追问的内容', 'err'); return; }
+  if (!state.settings.apiKey) {
+    wsState.aiErr = '还没配置 AI 接口（系统设置 → AI 接口），配置后即可连续追问。';
+    wsRenderAI();
+    return;
+  }
+  wsAskAI(v);
 }
 function wsOpenLink(url) {
   if (!/^https?:\/\//i.test(url)) { toast('链接不合法', 'err'); return; }
@@ -4813,7 +4931,11 @@ function wsNoteText(one) {
     L.push('');
     return L.join('\n');
   }
-  if (s.ai) { L.push('—— AI 整理 ——'); L.push(s.ai.trim()); L.push(''); }
+  if ((s.aiMsgs || []).length) {
+    L.push('—— AI 问答 ——');
+    s.aiMsgs.forEach(m => { if (m.content && m.content.trim()) L.push((m.role === 'user' ? '问：' : '答：') + m.content.trim()); });
+    L.push('');
+  } else if (s.ai) { L.push('—— AI 整理 ——'); L.push(s.ai.trim()); L.push(''); }
   if (s.results.length) {
     L.push(`—— 参考资料（${wsEngineName(s.engine)}，共 ${s.results.length} 条）——`);
     s.results.slice(0, 6).forEach((r, i) => L.push(`${i + 1}. ${r.title}（${r.site || ''}）\n   ${r.url}`));
@@ -4837,6 +4959,170 @@ function wsSaveNote(one) {
 function wsUseAsNote(i) {
   if (!wsState || !wsState.results[i]) return;
   wsSaveNote(wsState.results[i]);
+}
+
+/* ================= 搜索联想词（v1.38.0） =================
+ * 桌面版调主进程 web:suggest（Bing 开放联想接口，6 秒超时、失败静默）；
+ * 网页版受跨域限制，联想静默不出现，不影响其它功能。 */
+function wsSugInput() {
+  if (!wsState) return;
+  const inp = document.getElementById('wsQ');
+  if (!inp) return;
+  const q = inp.value.trim();
+  clearTimeout(wsState.sugTimer);
+  if (!q || q.length > 60 || !IS_DESKTOP || !window.electronAPI || typeof window.electronAPI.webSuggest !== 'function') {
+    wsSugClose(); return;
+  }
+  wsState.sugTimer = setTimeout(async () => {
+    if (!wsState) return;
+    const cur = (document.getElementById('wsQ')?.value || '').trim();
+    if (!cur || cur !== q) return;                    // 输入已变化，丢弃过期结果
+    try {
+      const r = await window.electronAPI.webSuggest(q);
+      const items = Array.isArray(r && r.items) ? r.items.filter(x => x && x !== cur) : [];
+      wsState.sugLastQ = cur;
+      wsSugRender(items.slice(0, 8), cur);
+    } catch (e) { wsSugClose(); }
+  }, 300);
+}
+function wsSugRender(items, cur) {
+  const el = document.getElementById('wsSug');
+  if (!el || !wsState) return;
+  wsState.sugs = items;
+  wsState.sugIdx = -1;
+  if (!items.length) { wsSugClose(); return; }
+  el.innerHTML = items.map((t, i) =>
+    `<div class="ws-sug-i${i === wsState.sugIdx ? ' on' : ''}" data-i="${i}" data-t="${esc(t)}" onmousedown="wsSugPick(+this.dataset.i)">
+      <span class="ico">🔍</span><span>${esc(t)}</span></div>`).join('');
+  el.classList.add('open');
+  wsState.sugOpen = true;
+  /* 对齐输入框位置（ws-head 已设 position:relative） */
+  const inp = document.getElementById('wsQ');
+  if (inp) {
+    el.style.left = inp.offsetLeft + 'px';
+    el.style.width = Math.max(320, Math.min(inp.clientWidth, 560)) + 'px';
+  }
+}
+function wsSugClose() {
+  const el = document.getElementById('wsSug');
+  if (el) el.classList.remove('open');
+  if (wsState) { wsState.sugOpen = false; wsState.sugIdx = -1; }
+}
+function wsSugNav(dir) {
+  if (!wsState || !wsState.sugOpen || !wsState.sugs.length) return;
+  const n = wsState.sugs.length;
+  wsState.sugIdx = ((wsState.sugIdx + dir) % n + n) % n;
+  const el = document.getElementById('wsSug');
+  if (el) el.querySelectorAll('.ws-sug-i').forEach((d, i) => d.classList.toggle('on', i === wsState.sugIdx));
+}
+function wsSugPick(i) {
+  const t = wsState && wsState.sugs[i];
+  if (!t) return;
+  const inp = document.getElementById('wsQ');
+  if (inp) inp.value = t;
+  wsSugClose();
+  wsRun();
+}
+
+/* ================= 收藏夹（v1.38.0） =================
+ * 把有用的网页结果 / AI 问答收进 wsFavs（随题库隔离，上限 100 条，超出淘汰最旧）；
+ * 收藏可随时回看、一键转成知识库笔记。 */
+function wsFavSave() {
+  if (DB.bkvSet) DB.bkvSet('wsFavs', state.wsFavs || []);
+  const cnt = document.getElementById('wsFavCnt');
+  if (cnt) cnt.textContent = (state.wsFavs || []).length;
+}
+function wsFavPush(item) {
+  const favs = Array.isArray(state.wsFavs) ? state.wsFavs : [];
+  /* 同 URL（网页结果）或同「q+ai 前 40 字」（AI 问答）不重复收 */
+  const key = item.kind === 'ai'
+    ? 'ai|' + item.q + '|' + String(item.ai || '').slice(0, 40)
+    : 'web|' + (item.url || '');
+  if (favs.some(f => ((f.kind === 'ai' ? 'ai|' + f.q + '|' + String(f.ai || '').slice(0, 40) : 'web|' + (f.url || '')) === key))) {
+    toast('这条已经在收藏夹里了', 'ok');
+    return false;
+  }
+  favs.unshift(item);
+  state.wsFavs = favs.slice(0, WS_FAV_MAX);   // 超出淘汰最旧
+  wsFavSave();
+  wsFavRender();
+  toast('已收进收藏夹', 'ok');
+  return true;
+}
+function wsFavAddResult(i) {
+  if (!wsState || !wsState.results[i]) return;
+  const r = wsState.results[i];
+  wsFavPush({
+    id: 'wf' + Date.now() + Math.random().toString(36).slice(2, 6),
+    kind: 'web', q: wsState.q, kp: wsState.kp || '', engine: wsState.engine,
+    title: r.title, url: r.url, snippet: r.snippet || '', ai: '', at: Date.now(),
+  });
+}
+function wsFavAddAI() {
+  if (!wsState) return;
+  const msgs = (wsState.aiMsgs || []).filter(m => m.content && m.content.trim());
+  if (!msgs.length) { toast('还没有 AI 回答，先让 AI 解答或追问一轮', 'err'); return; }
+  wsFavPush({
+    id: 'wf' + Date.now() + Math.random().toString(36).slice(2, 6),
+    kind: 'ai', q: wsState.q, kp: wsState.kp || '', engine: wsState.engine,
+    title: 'AI 问答：' + wsState.q, url: '', snippet: '', ai: msgs.map(m => (m.role === 'user' ? '问：' : '答：') + m.content.trim()).join('\n\n'), at: Date.now(),
+  });
+}
+function wsFavToggle() {
+  const w = document.getElementById('wsFavWrap');
+  const b = document.getElementById('wsFavBtn');
+  if (!w) return;
+  wsFavRender();
+  const hidden = w.classList.toggle('hidden');
+  if (b) b.childNodes[0].textContent = hidden ? '⭐ 收藏夹' : '⭐ 收起收藏夹';
+  /* 两个抽屉互斥，别一起摊开 */
+  if (!hidden) {
+    const h = document.getElementById('wsHistWrap');
+    if (h && !h.classList.contains('hidden')) { h.classList.add('hidden'); const hb = document.getElementById('wsHistBtn'); if (hb) hb.textContent = '🕘 最近查询'; }
+  }
+}
+function wsFavRender() {
+  const wrap = document.getElementById('wsFavWrap');
+  if (!wrap) return;
+  const list = Array.isArray(state.wsFavs) ? state.wsFavs : [];
+  wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);margin:6px 0 8px">收藏夹（${list.length}/${WS_FAV_MAX}，随当前题库保存）</div>` +
+    (list.length ? list.map(f => `
+      <div class="ws-fav-i" style="margin-bottom:6px">
+        <span class="t" ${f.url ? `data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)" title="${esc(f.url)}"` : ''} style="${f.url ? 'cursor:pointer' : ''}">${f.kind === 'ai' ? '🤖 ' : '🌐 '}${esc(f.title || f.q || '（无标题）')}</span>
+        <span class="d">${fmtDate(f.at)}</span>
+        <span class="op">
+          ${f.url ? `<button class="ghost" data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)">打开</button>` : ''}
+          <button class="ghost" data-id="${f.id}" onclick="wsFavNote(this.dataset.id)" title="整理成笔记存进知识库">转笔记</button>
+          <button class="ghost" data-id="${f.id}" onclick="wsFavDel(this.dataset.id)" title="从收藏夹删除">✕</button>
+        </span>
+      </div>`).join('')
+      : '<div class="ws-empty">收藏夹还是空的 —— 网页结果卡上的「⭐ 收藏」、AI 解答旁的「⭐ 收藏回答」都能收进来</div>');
+}
+function wsFavDel(id) {
+  state.wsFavs = (state.wsFavs || []).filter(f => f.id !== id);
+  wsFavSave();
+  wsFavRender();
+  toast('已从收藏夹删除', 'ok');
+}
+/** 收藏项 → 知识库笔记草稿 */
+function wsFavNote(id) {
+  const f = (state.wsFavs || []).find(x => x.id === id);
+  if (!f) return;
+  const L = [`【联网查询·收藏】${f.q || f.title || ''}`];
+  if (f.kp && f.kp !== f.q) L.push(`关联知识点：${f.kp}`);
+  L.push(`收藏时间：${wsNowText()}`, '');
+  if (f.kind === 'ai') {
+    L.push('—— AI 问答 ——', f.ai || '', '');
+  } else {
+    L.push(`—— 网页摘录（${wsEngineName(f.engine)}）——`, f.title || '');
+    if (f.url) L.push(f.url);
+    if (f.snippet) { L.push('', f.snippet); }
+    L.push('');
+  }
+  L.push('—— 我的补充 ——', '');
+  kbEditing = null;
+  kbOpenEditor({ kind: 'free', kp: f.kp || '', text: L.join('\n'), isNew: true });
+  toast('已把收藏整理成草稿，确认后保存', 'ok');
 }
 
 /** 重练某知识点下的所有错题（与错题本数据联动） */
@@ -7127,12 +7413,15 @@ async function viewSet() {
   </div>
   <div class="card"><h3>🔍 联网查询</h3>
     <p style="color:var(--muted);font-size:12px;margin:0 0 10px;line-height:1.8">
-      在知识点图谱详情卡或知识库点「🔍 联网查询」，软件会抓取 Bing 搜索结果并在软件内展示（不打开浏览器），
-      还可以让 AI 参考这些网页摘要给出讲解，结果可一键存进知识库。</p>
+      在知识点图谱详情卡或知识库点「🔍 联网查询」，软件会抓取搜索引擎结果并在软件内展示（不打开浏览器），
+      还可以让 AI 参考这些网页摘要给出讲解并连续追问，结果可一键存进知识库或收藏夹。</p>
     <div class="grid c2">
       <label class="f"><span>默认搜索引擎</span>
         <select id="sEngine">
-          <option value="bingcn" ${s.searchEngine !== 'bing' ? 'selected' : ''}>Bing 国内（cn.bing.com，国内快）</option>
+          <option value="bingcn" ${s.searchEngine === 'bingcn' ? 'selected' : ''}>Bing 国内（cn.bing.com，国内快）</option>
+          <option value="sogou" ${s.searchEngine === 'sogou' ? 'selected' : ''}>搜狗（微信文章收录多）</option>
+          <option value="so360" ${s.searchEngine === 'so360' ? 'selected' : ''}>360 搜索</option>
+          <option value="aggregate" ${s.searchEngine === 'aggregate' ? 'selected' : ''}>智能聚合（Bing国内+搜狗+360 三路合并，最全）</option>
           <option value="bing" ${s.searchEngine === 'bing' ? 'selected' : ''}>Bing 国际（www.bing.com）</option>
         </select></label>
       <label class="f"><span>搜索完成后</span>
@@ -7142,8 +7431,9 @@ async function viewSet() {
         </select></label>
     </div>
     <span style="display:block;color:var(--muted);font-size:11px;margin-top:4px">
-      说明：引擎只影响「网页结果」的来源；AI 解答使用上方配置的 AI 接口，未配置 API Key 时只显示网页结果。
-      网页搜索需要桌面版（首次使用请升级到 1.36.0 及以上），网页版会改为在浏览器新标签页打开。</span>
+      说明：当前引擎被拦截或查不到结果时，会自动换其它引擎重试；「智能聚合」三路并发取约 14 条去重合并，结果最全。
+      搜索框输入时会显示联想词（桌面版）。引擎只影响「网页结果」的来源；AI 解答使用上方配置的 AI 接口，未配置 API Key 时只显示网页结果。
+      网页搜索需要桌面版（首次使用请升级到 1.38.0 及以上），网页版会改为在浏览器新标签页打开。</span>
   </div>
   <div class="card"><h3>🎨 界面与练习</h3>
     <div class="grid c2">
@@ -7800,17 +8090,20 @@ const HELP_SECTIONS = [
       <div class="help-h4">面板里能做什么</div>
       <table class="help-table">
         <tr><th style="width:120px">区域</th><th>说明</th></tr>
-        <tr><td>🌐 网页结果（左）</td><td>抓取 Bing 搜索结果的标题 / 网址 / 摘要，点标题或「打开原文」用默认浏览器打开；「复制链接」方便引用；「💾 存这条」只把这一条存成笔记。</td></tr>
-        <tr><td>🤖 AI 解答（右）</td><td>把左侧前几条摘要作为参考资料一起交给 AI，生成一段通俗讲解（先结论、再要点、带易错点），比单纯搜索更省事。默认搜索完自动开始，可在系统设置里关掉。</td></tr>
+        <tr><td>🌐 网页结果（左）</td><td>抓取搜索引擎结果的标题 / 网址 / 摘要，点标题或「打开原文」用默认浏览器打开；「复制链接」方便引用；「💾 存这条」只把这一条存成笔记；「⭐ 收藏」收进收藏夹。搜索引擎有 Bing 国内 / 搜狗 / 360 / Bing 国际 / <b>智能聚合</b>（三路并发合并去重，最全），当前引擎被拦截时自动换其它引擎重试。</td></tr>
+        <tr><td>🤖 AI 解答（右）</td><td>把左侧前几条摘要作为参考资料一起交给 AI，生成一段通俗讲解（先结论、再要点、带易错点）。<b>支持连续追问</b>：答完后在右栏底部输入框接着问（如「它和动量定理什么关系」），AI 记得前面聊过什么；「↻ 重答」清空对话重来；「⭐ 收藏回答」把最近一轮问答收进收藏夹。默认搜索完自动开始，可在系统设置里关掉。</td></tr>
+        <tr><td>⭐ 收藏夹（底部）</td><td>收进来的网页结果和 AI 问答都存在这里（随题库隔离，上限 100 条），可随时打开原文、<b>转成知识库笔记</b>或删除。</td></tr>
         <tr><td>🕘 最近查询（底部）</td><td>记着最近 30 次查询（随题库），点一下重新查，不用重复输入。</td></tr>
       </table>
+      <div class="help-h4">搜索联想词</div>
+      <p>搜索框输入时会自动出现联想词提示（桌面版，300ms 防抖），<kbd>↑</kbd><kbd>↓</kbd> 选择、<kbd>Enter</kbd> 直接搜选中项，或鼠标点一下；不想用直接回车搜原文。</p>
       <div class="help-h4">存进知识库</div>
       <ul>
-        <li>点右上角 <b>💾 存进知识库</b>，软件会把「查询词 + 查询时间 + AI 整理 + 参考资料链接」拼成一篇草稿，弹窗里可以先改再存。</li>
+        <li>点右上角 <b>💾 存进知识库</b>，软件会把「查询词 + 查询时间 + AI 问答 + 参考资料链接」拼成一篇草稿，弹窗里可以先改再存。</li>
         <li>草稿末尾留了「我的补充」——自己再写两句心得，比纯 AI 内容记得牢。</li>
         <li>存进来的是一条 <b>🗒 知识库手记</b>：如果是从某个知识点发起的查询，会自动关联该知识点，之后在图谱里能看到笔记角标。</li>
       </ul>
-      <div class="help-tip"><b>说明：</b>网页搜索在软件内完成需要桌面版 1.36.0 及以上（由主程序抓取，网页版会改为在浏览器新标签页打开）；AI 解答依赖「系统设置 → AI 接口」里配置的 Key，没配也能正常看网页结果。搜索引擎默认「Bing 国内」，公司网络拦截时可在设置里换成「Bing 国际」。</div>`,
+      <div class="help-tip"><b>说明：</b>网页搜索在软件内完成需要桌面版（由主程序抓取，网页版会改为在浏览器新标签页打开）；AI 解答依赖「系统设置 → AI 接口」里配置的 Key，没配也能正常看网页结果。默认引擎「Bing 国内」，被公司网络拦截时会在设置里换引擎或用「智能聚合」。</div>`,
   },
   {
     id: 'stats', ico: '📊', title: '统计分析',

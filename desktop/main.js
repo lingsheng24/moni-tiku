@@ -745,10 +745,15 @@ function regAI() {
  * 解析成结构化数据 → 渲染层本地画卡片」。这样观感统一、可点击打开原文，
  * 摘要还能作为参考资料喂给 AI 做综合解答（相当于搜索 + 总结）。 */
 const SEARCH_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+/* v1.38.0：引擎扩为 4 个 + 智能聚合；每个引擎自带解析函数，哪个被拦就自动换下一个 */
 const SEARCH_ENGINES = {
-  bingcn: { name: 'Bing 国内', build: q => `https://cn.bing.com/search?q=${encodeURIComponent(q)}&setlang=zh-CN&ensearch=0` },
-  bing: { name: 'Bing 国际', build: q => `https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=zh-CN` },
+  bingcn: { name: 'Bing 国内', build: q => `https://cn.bing.com/search?q=${encodeURIComponent(q)}&setlang=zh-CN&ensearch=0`, parse: parseBingResults },
+  bing: { name: 'Bing 国际', build: q => `https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=zh-CN`, parse: parseBingResults },
+  sogou: { name: '搜狗', build: q => `https://www.sogou.com/web?query=${encodeURIComponent(q)}`, parse: parseSogouResults },
+  so360: { name: '360 搜索', build: q => `https://www.so.com/s?q=${encodeURIComponent(q)}`, parse: parseSoResults },
 };
+/* 智能聚合的并发引擎（都是国内直连快的），三路各取一批后交替合并去重 */
+const AGG_ORDER = ['bingcn', 'sogou', 'so360'];
 function httpsGet(urlStr, headers = {}, timeoutMs = 20000) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
@@ -836,22 +841,126 @@ function parseBingResults(html, limit = 10) {
   }
   return out;
 }
-/** 联网搜索：优先用户选择的引擎，国内站失败/零结果时自动回落国际站 */
+/** 搜狗跳转链接（/link?url=…）拼成绝对地址；其它情况要求是合法 http(s) */
+function unwrapSogouUrl(u) {
+  const s = decodeEnt(String(u || '').trim());
+  if (/^\/link\?/i.test(s)) return 'https://www.sogou.com' + s;
+  return /^https?:\/\//i.test(s) ? s : '';
+}
+/** 解析搜狗结果页：每个 <div class="vrwrap"> 里取 h3.vr-title 的标题链接 + space-txt/str_info 摘要
+ *  来源域名从块内的真实链接（cite 区或第一个非搜狗链接）提取，跳转链接保留原样（浏览器会自动 302 到原文） */
+function parseSogouResults(html, limit = 10) {
+  const out = [];
+  const clean = String(html || '').replace(/<!--[\s\S]*?-->/g, '');
+  const parts = clean.split(/<div[^>]+class="vrwrap[" ]/);
+  for (let i = 1; i < parts.length && out.length < limit; i++) {
+    const blk = parts[i];
+    const h = blk.match(/<h3[^>]*class="[^"]*vr-title[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i)
+      || blk.match(/<h3[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    if (!h) continue;
+    const url = unwrapSogouUrl(h[1]);
+    const title = stripTags(h[2]);
+    if (!title || !/^https?:\/\//i.test(url)) continue;
+    const cap = blk.match(/<p[^>]*class="[^"]*space-txt[^"]*"[^>]*>([\s\S]*?)<\/p>/i)
+      || blk.match(/<div[^>]*class="[^"]*str_info[^"]*"[^>]*>([\s\S]*?)<\/div>/i)
+      || blk.match(/<div[^>]*class="[^"]*text-layout[^"]*"[^>]*>([\s\S]*?)<\/div>/i)
+      || blk.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+    const snippet = cap ? stripTags(cap[1]) : '';
+    let site = '';
+    const cite = blk.match(/<a[^>]*class="[^"]*citeLinkClass[^"]*"[^>]*href="(https?:\/\/[^"]+)"/i)
+      || blk.match(/href="(https?:\/\/(?!www\.sogou\.com)[^"]+)"/i);
+    if (cite) { try { site = new URL(decodeEnt(cite[1])).hostname.replace(/^www\./, ''); } catch (_) { } }
+    if (!site) { try { site = new URL(url).hostname.replace(/^www\./, ''); } catch (_) { } }
+    if (/^(www\.)?sogou\.com$/.test(site)) site = '';   // 拿不到真实来源时宁可不显示，也不显示搜狗自己
+    if (out.some(x => x.url === url)) continue;
+    out.push({ title, url, snippet: snippet.slice(0, 400), site });
+  }
+  return out;
+}
+/** 360 搜索：h3.res-title 里的 a 带 data-mdurl（真实地址），摘要 res-desc / data-result-summary */
+function parseSoResults(html, limit = 10) {
+  const out = [];
+  const clean = String(html || '').replace(/<!--[\s\S]*?-->/g, '');
+  const re = /<h3[^>]*class="[^"]*res-title[^"]*"[^>]*>([\s\S]*?)<\/h3>/gi;
+  let m;
+  while ((m = re.exec(clean)) && out.length < limit) {
+    const a = m[1].match(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    if (!a) continue;
+    let url = decodeEnt(a[1]).trim();
+    if (!/^https?:\/\//i.test(url) || /www\.so\.com\/link/i.test(url)) {
+      const md = (m[0] + m[1]).match(/data-mdurl="([^"]+)"/i);
+      url = md ? decodeEnt(md[1]).trim() : (/^\/link/i.test(url) ? 'https://www.so.com' + url : url);
+    }
+    const title = stripTags(a[2]);
+    if (!title || !/^https?:\/\//i.test(url)) continue;
+    /* 摘要在 h3 之后、下一个 h3 之前的正文区里 */
+    const nextH = clean.indexOf('<h3', m.index + m[0].length);
+    const rest = clean.slice(m.index + m[0].length, nextH < 0 ? m.index + 4000 : Math.min(nextH, m.index + 4000));
+    const cap = rest.match(/<p[^>]*class="[^"]*res-desc[^"]*"[^>]*>([\s\S]*?)<\/p>/i)
+      || rest.match(/<span[^>]*data-result-summary[^>]*>([\s\S]*?)<\/span>/i)
+      || rest.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+    const snippet = cap ? stripTags(cap[1]) : '';
+    let site = '';
+    try { site = new URL(url).hostname.replace(/^www\./, ''); } catch (_) { }
+    if (out.some(x => x.url === url)) continue;
+    out.push({ title, url, snippet: snippet.slice(0, 400), site });
+  }
+  return out;
+}
+/** 单引擎抓取 + 解析，失败抛错（由上层决定回落/聚合） */
+async function fetchEngine(id, q, limit) {
+  const eng = SEARCH_ENGINES[id];
+  if (!eng) throw new Error('未知引擎 ' + id);
+  const searchUrl = eng.build(q);
+  const r = await httpsGet(searchUrl);
+  if (r.status !== 200) throw new Error(`${eng.name} 返回 ${r.status}`);
+  const results = eng.parse(r.text, limit);
+  if (!results.length) throw new Error(`${eng.name} 没有解析到结果`);
+  return { ok: true, engine: id, engineName: eng.name, query: q, searchUrl, results };
+}
+/** 智能聚合：三路并发各取一批，交替合并去重（同 URL 或同标题前 24 字视为重复） */
+async function searchAggregate(q, limit) {
+  const settled = await Promise.allSettled(AGG_ORDER.map(id => fetchEngine(id, q, limit)));
+  const goods = settled.filter(s => s.status === 'fulfilled').map(s => s.value);
+  const errors = settled.filter(s => s.status === 'rejected')
+    .map(s => String((s.reason && s.reason.message) || s.reason));
+  if (!goods.length) {
+    const eng = SEARCH_ENGINES.bingcn;
+    return { ok: false, query: q, engine: 'aggregate', engineName: '智能聚合', searchUrl: eng.build(q), results: [], error: errors.join('；') || '联网查询失败' };
+  }
+  const seen = new Set();
+  const merged = [];
+  outer:
+  for (let i = 0; i < limit; i++) {
+    for (const g of goods) {
+      const r = g.results[i];
+      if (!r) continue;
+      const key = (r.url || '').replace(/[?#].*$/, '') + '|' + (r.title || '').slice(0, 24);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(r);
+      if (merged.length >= limit + 4) break outer;
+    }
+  }
+  return {
+    ok: true, engine: 'aggregate', query: q,
+    engineName: '智能聚合（' + goods.map(g => g.engineName).join(' + ') + '）',
+    searchUrl: goods[0].searchUrl, results: merged,
+  };
+}
+/** 联网搜索：用户选「智能聚合」走三路合并；选单引擎时失败/零结果按「国内优先」自动回落其它引擎 */
 async function searchWeb(q, engine = 'bingcn', limit = 10) {
-  const order = engine === 'bing' ? ['bing', 'bingcn'] : ['bingcn', 'bing'];
+  if (engine === 'aggregate') return searchAggregate(q, limit);
+  const ids = Object.keys(SEARCH_ENGINES).filter(k => k !== 'aggregate');
+  const order = ids.includes(engine)
+    ? [engine, ...ids.filter(k => k !== engine)]
+    : ['bingcn', 'sogou', 'so360', 'bing'];
   const errors = [];
   for (const id of order) {
-    const eng = SEARCH_ENGINES[id];
-    if (!eng) continue;
-    const searchUrl = eng.build(q);
     try {
-      const r = await httpsGet(searchUrl);
-      if (r.status !== 200) { errors.push(`${eng.name} 返回 ${r.status}`); continue; }
-      const results = parseBingResults(r.text, limit);
-      if (!results.length) { errors.push(`${eng.name} 没有解析到结果`); continue; }
-      return { ok: true, engine: id, engineName: eng.name, query: q, searchUrl, results };
+      return await fetchEngine(id, q, limit);
     } catch (e) {
-      errors.push(`${eng.name}：${e && e.message || e}`);
+      errors.push(String((e && e.message) || e));
     }
   }
   const eng = SEARCH_ENGINES[engine] || SEARCH_ENGINES.bingcn;
@@ -862,6 +971,22 @@ function registerWebSearch() {
     const query = String(q || '').trim();
     if (!query) return { ok: false, error: '查询内容为空', results: [] };
     return searchWeb(query, engine, Math.min(Math.max(Number(limit) || 10, 1), 10));
+  });
+  /* 搜索联想词（Bing 开放接口，返回 JSON 数组；失败静默返回空，不弹错） */
+  ipcMain.handle('web:suggest', async (e, { q } = {}) => {
+    const query = String(q || '').trim();
+    if (!query || query.length > 60) return { ok: true, items: [] };
+    try {
+      const r = await httpsGet(`https://api.bing.com/osjson.aspx?query=${encodeURIComponent(query)}`, {}, 6000);
+      if (r.status !== 200) return { ok: true, items: [] };
+      const j = JSON.parse(r.text);
+      const items = (Array.isArray(j) && Array.isArray(j[1]) ? j[1] : [])
+        .filter(x => typeof x === 'string' && x.trim() && x.trim() !== query)
+        .slice(0, 8);
+      return { ok: true, items };
+    } catch (err) {
+      return { ok: true, items: [] };
+    }
   });
   /* 只允许 http/https，避免被网页内容诱导去打开本地程序 */
   ipcMain.handle('app:openExternal', async (e, { url } = {}) => {

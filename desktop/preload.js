@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openDataDir: () => invoke('app:openDataDir'),
   /** 联网查询：抓取搜索引擎结果并解析为 {title,url,snippet,site} 列表 */
   webSearch: (payload) => invoke('web:search', payload),
+  /** 搜索联想词（v1.38.0）：输入提示，失败静默返回 { ok:true, items:[] } */
+  webSuggest: (q) => invoke('web:suggest', { q }),
   /** 用系统默认浏览器打开链接（仅 http/https） */
   openExternal: (url) => invoke('app:openExternal', { url }),
   /** 数据文件路径管理 */
