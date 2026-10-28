@@ -2,6 +2,20 @@
 
 一个基于文档自动出题的本地题库工具：导入 PDF / DOCX / TXT → AI 生成题目 → 练习 → 错题本 → 统计分析 → 导出。
 
+## 下载与源码
+
+三个平台同步维护，源码内容完全一致，任选其一访问：
+
+| 平台 | 下载最新版 | 源码仓库 | 说明 |
+|---|---|---|---|
+| **GitCode** | [Releases](https://gitcode.com/JinFengjian/moni-tiku/releases) | <https://gitcode.com/JinFengjian/moni-tiku> | 国内节点，下载与在线更新通常最快（推荐） |
+| **GitHub** | [Releases](https://github.com/lingsheng24/moni-tiku/releases/latest) | <https://github.com/lingsheng24/moni-tiku> | 国际站点，国内访问可能较慢 |
+| **Gitee** | — | <https://gitee.com/lingsheng24/moni-tiku> | 国内源码镜像（仅托管源码，安装包请从上两处下载） |
+
+安装包分两种：`MoniTiKu-Setup-x.y.z.exe`（安装版，支持应用内在线更新）与 `模拟题库-x.y.z-portable.exe`（免安装便携版）。详见下方「桌面版 → 打包 exe」。
+
+> 三平台的源码都是同一个仓库（`main` 分支）：GitCode / GitHub 同时承载安装包分发与自动更新，Gitee 仅作源码镜像与国内访问备份。
+
 ## 一、网页版（无需安装）
 
 直接双击打开 `模拟题库-Web版.html`（Chrome / Edge 浏览器即可）。
@@ -44,6 +58,7 @@
 |---|---|---|
 | GitCode | <https://gitcode.com/JinFengjian/moni-tiku> | 国内节点，实测 **6~8 MB/s**（90MB 约 15 秒），通常最快 |
 | GitHub | <https://github.com/lingsheng24/moni-tiku> | 国内可能只有 0.06~0.4 MB/s，慢 |
+| Gitee | <https://gitee.com/lingsheng24/moni-tiku> | 仅托管源码与镜像，**不参与自动更新**，也无安装包 |
 
 软件每次「检查更新」会串行测速这 5 条线路（GitCode / GitHub / 3 个加速镜像），**自动选最快的**；用户也可在「系统设置 → 软件更新」手动锁定某条线路。
 
@@ -53,14 +68,20 @@
 1. 在 CHANGELOG.md 最上方补写本版本的变更内容（类别：新增 / 优化 / 修复 / 变更 / 移除）
 2. 改 desktop\package.json 的 version，双击 打包exe.cmd 打包并签名
 3. 双击 一键发布.cmd，自动同时发布到 GitHub + GitCode
+4. 双击 推送源码.cmd，把源码同步到 GitHub / GitCode / Gitee 三个仓库
 ```
+
+> 第 4 步可省：Release 里已经有人能下载到新版，源码只是给想看代码的人。脚本会自动关掉证书吊销检查、清空代理（否则国内直连 GitHub 必失败），已推送过的会显示「已是最新」，重复运行无副作用。
 
 Token 只需设置一次，存到本机用户环境变量后永久生效：
 
 ```bat
 setx GH_TOKEN       <GitHub 个人访问令牌>     :: https://github.com/settings/tokens  勾选 repo
 setx GITCODE_TOKEN  <GitCode 个人访问令牌>    :: gitcode.com → 设置 → 访问令牌  勾选 api
+setx GITEE_TOKEN    <Gitee 个人访问令牌>      :: gitee.com → 设置 → 私人令牌  勾选 projects
 ```
+
+> `GH_TOKEN` / `GITCODE_TOKEN` 供「一键发布」上传安装包；`GITEE_TOKEN` 仅在推送源码到 Gitee 镜像时用到（发布安装包不需要它）。
 
 > 设置后**重新打开命令行窗口**才会生效。脚本读取顺序：进程环境变量 → 本机用户环境变量 → 命令行参数。
 
@@ -164,7 +185,9 @@ desktop/
 ├─ 一键发布.cmd        一键发布到 GitHub + GitCode（两个更新源）
 ├─ 一键发布.js         顺序调用下面两个脚本，任一失败不影响另一个
 ├─ 发布更新到GitHub.js  发布到 GitHub Release
-└─ 发布更新到GitCode.js 发布到 GitCode Release（预签名地址 + PUT 两段式上传）
+├─ 发布更新到GitCode.js 发布到 GitCode Release（预签名地址 + PUT 两段式上传）
+├─ 推送源码.cmd        一键把源码推到 GitHub / GitCode / Gitee（项目根目录）
+└─ 推送源码.js         三平台 git push 封装（自动关吊销检查、清代理）
 ```
 
 界面本身与网页版共用同一个 HTML 文件（`../模拟题库-Web版.html`），运行时会自动识别环境并切换数据/网络通道，因此两边功能保持一致。
