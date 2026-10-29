@@ -638,7 +638,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.45.0';
+const APP_VER = '1.45.1';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -3253,10 +3253,18 @@ function buildGraph() {
   }
 
   // 节点过多时只保留题量最大的（章节不再占用名额）
+  // v1.45.1：有笔记的知识点必须留在图上——否则写完笔记，对应节点却被裁掉，看起来像「笔记没进图谱」
   let shown = nodes.map((n, i) => ({ ...n, i }));
   const MAXN = 74;
-  if (shown.length > MAXN) shown = shown.sort((a, b) => b.size - a.size).slice(0, MAXN);
+  if (shown.length > MAXN) {
+    const noted = new Set();
+    for (const n of kbAllNotes()) for (const k of (n.kps || [])) noted.add(k);
+    const withNote = shown.filter(n => noted.has(n.name));
+    const rest = shown.filter(n => !noted.has(n.name)).sort((a, b) => b.size - a.size);
+    shown = withNote.concat(rest).slice(0, Math.max(MAXN, withNote.length));
+  }
   const keep = new Set(shown.map(n => n.i));
+  const totalNodes = nodes.length;
   const edges = [...pairMap.values()]
     .filter(r => keep.has(r.a) && keep.has(r.b))
     .map(r => {
@@ -3265,7 +3273,7 @@ function buildGraph() {
       return [r.a, r.b, r.n > 0 ? r.n : 1, kind, [...r.secs], r.sec || '', r.sim || 0];
     })
     .sort((p, q) => (p[3] === 'co' ? 0 : 1) - (q[3] === 'co' ? 0 : 1) || q[2] - p[2]);
-  return { nodes: shown, edges };
+  return { nodes: shown, edges, total: totalNodes };
 }
 function masteryColor(rate) {
   if (rate === null) return '#94a3b8';
@@ -4012,7 +4020,7 @@ function kpSectionModal(label) {
 }
 
 async function viewKP(reset) {
-  const { nodes, edges } = buildGraph();
+  const { nodes, edges, total } = buildGraph();
   if (!nodes.length) {
     $('#view').innerHTML = `<h1>知识点图谱</h1><div class="sub">把题目按知识点聚合成 3D 关系球</div>
       <div class="card"><div class="empty">题库还没有题目，先去「AI 生成题目」吧</div></div>`;
@@ -4036,7 +4044,7 @@ async function viewKP(reset) {
   const linkTxt = `${edges.length} 条双链（同题 ${cnt.co} · 同章节 ${cnt.sec} · 相似 ${cnt.qsim}）`;
   const soloKps = kpNodes.filter(n => !edges.some(([a, b]) => a === n.i || b === n.i)).length;
   $('#view').innerHTML = `
-  <h1>知识点图谱</h1><div class="sub">${kpNodes.length} 个知识点${linkOn ? ` · ${linkTxt}` : ''} · ${state.questions.length} 道题　拖动旋转球体 · 滚轮缩放 · 悬停暂停旋转看详情 · 单击选中 · 双击沿双链展开 · 点空白取消选中</div>
+  <h1>知识点图谱</h1><div class="sub">${kpNodes.length} 个知识点${total > kpNodes.length ? `<span style="color:var(--amber)">（题库共 ${total} 个，图上按题量取前 ${kpNodes.length} 个，<b>写过笔记的一律保留</b>）</span>` : ''}${linkOn ? ` · ${linkTxt}` : ''} · ${state.questions.length} 道题　拖动旋转球体 · 滚轮缩放 · 悬停暂停旋转看详情 · 单击选中 · 双击沿双链展开 · 点空白取消选中</div>
   <div class="card noprint"><div class="row" style="margin-bottom:12px">
     ${subjects.length ? `<select id="kpSubj" style="width:auto;min-width:118px">${subjectOptionsHTML(kpSubject, '全部科目')}</select>` : ''}
     <label class="kp-tgl" title="双链：知识点之间的关联由系统自动识别，不用手工连；共现题数越多线越粗">
@@ -4312,7 +4320,13 @@ function goKPDetail(name) {
   if (kpSubject) kpSubject = '';        // 跨科目定位时清掉科目筛选，保证节点在图里
   kpSelected = name;
   go('kp');
-  toast(`已定位知识点「${name}」`);
+  /* v1.45.1：知识点太多时图上只画一部分（有笔记的必留），被裁掉的节点不静默跳过 */
+  setTimeout(() => {
+    const box = document.getElementById('kpDetail');
+    if (box && !box.innerHTML.trim()) {
+      toast(`「${name}」题量较小，图谱按题量只画前 74 个知识点，暂无这个节点；去知识库能看到它的笔记`, 'err');
+    } else toast(`已定位知识点「${name}」`);
+  }, 350);
 }
 function toggleKPNote() {
   const show = $('#kpn-show'), edit = $('#kpn-edit');
