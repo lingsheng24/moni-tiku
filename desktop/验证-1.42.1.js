@@ -52,7 +52,7 @@ const ymlVer = (yml.match(/version:\s*([\d.]+)/) || [])[1];
   const gcLimited = gcYml.status === 429 || /TOO_MANY_REQUESTS/.test(gcBody);
   console.log('latest.yml:', gcYml.status, gcVer || (gcLimited ? '限流(稍后重试)' : '-'),
     gcVer === ymlVer ? '✅' : gcLimited ? '⚠️ 请求过密被限流，非版本问题' : '❌');
-  const gcExe = await req('https://gitcode.com/JinFengjian/moni-tiku/releases/download/latest/MoniTiKu-Setup-1.42.0.exe',
+  const gcExe = await req('https://gitcode.com/JinFengjian/moni-tiku/releases/download/latest/MoniTiKu-Setup-1.42.1.exe',
     { headers: { Range: 'bytes=0-1023' } });
   const cr = gcExe.headers && gcExe.headers['content-range'];
   console.log('安装包 Range GET:', gcExe.status, cr || '', gcExe.status === 206 ? '✅' : '⚠️');
@@ -60,10 +60,10 @@ const ymlVer = (yml.match(/version:\s*([\d.]+)/) || [])[1];
   // ── Gitee ──
   console.log('\n── Gitee ──');
   for (const [name, expect] of [
-    ['MoniTiKu-Setup-1.42.0.exe', ymlSize],
-    ['MoniTiKu-Portable-1.42.0.exe', 0],
+    ['MoniTiKu-Setup-1.42.1.exe', ymlSize],
+    ['MoniTiKu-Portable-1.42.1.exe', 0],
   ]) {
-    const u = `https://gitee.com/lingsheng24/moni-tiku/releases/download/v1.42.0/${name}`;
+    const u = `https://gitee.com/lingsheng24/moni-tiku/releases/download/v1.42.1/${name}`;
     const r = await req(u, { headers: { Range: 'bytes=0-1023' } });
     const len = r.headers && r.headers['content-range']
       ? Number((r.headers['content-range'].match(/\/(\d+)/) || [])[1])
