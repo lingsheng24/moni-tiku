@@ -510,7 +510,7 @@ body.is-desktop .modal-mask{top:36px}
 .mist-note-show{margin-top:8px;padding:8px 12px;border-left:3px solid var(--amber);background:var(--bg);border-radius:0 8px 8px 0;font-size:13px;color:var(--text);white-space:pre-wrap;word-break:break-word}
 .mist-note-edit textarea{width:100%;min-height:88px;margin-top:8px}
 /* ---------- 题目笔记（v1.43.0）：复习时随手记，输入即自动保存 ---------- */
-.qnote{margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);width:100%;text-align:left}
+.qnote{margin:0 0 12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);width:100%;text-align:left}
 .qnote-hd{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:6px}
 .qnote-hd b{color:var(--primary);font-size:12.5px;font-weight:600}
 .qnote-tip{margin-left:auto;font-size:11.5px;color:var(--muted)}
@@ -638,7 +638,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.44.0';
+const APP_VER = '1.45.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -1642,6 +1642,15 @@ async function saveQNote(qid, text, silent) {
   q.note = t; q.note_at = t ? Date.now() : 0;
   try {
     if (await dbPut('questions', { ...q }) === DB_TIMEOUT) throw new Error('写入超时');
+    /* v1.45.0：题目笔记自动挂进知识点图谱——写完立刻同步节点角标；正停在该知识点的详情卡上就当场刷新列表 */
+    if (typeof kbNoteCountsRefresh === 'function') {
+      kbNoteCountsRefresh();
+      if (typeof curView === 'string' && curView === 'kp' && typeof kpSelected === 'string' && kpSelected) {
+        const d = document.getElementById('kpDetail');
+        if (d) d.innerHTML = renderKPDetail(kpSelected);
+        if (typeof kpDraw === 'function') kpDraw();
+      }
+    }
     return true;
   } catch (e) {
     q.note = old; q.note_at = oldAt;
@@ -4197,6 +4206,8 @@ function renderKPDetail(name) {
     return (q && q.knowledge_point === name) || m.kp === name;
   });
   const noteRec = (state.kpNotes || {})[name];
+  /* v1.45.0：该知识点下每道题的笔记（questions[].note）自动汇总到这里，新笔记在前 */
+  const qNotes = qs.filter(q => qNote(q)).sort((a, b) => (b.note_at || 0) - (a.note_at || 0));
   const nbs = kpNeighborInfo(name);
   const secs = node.sections || [];
   return `<div class="card"><h3>🔍 「${esc(name)}」共 ${qs.length} 题
@@ -4204,6 +4215,7 @@ function renderKPDetail(name) {
       ${nbs.length ? `<span class="pill blue" style="cursor:pointer" onclick="kpRelModal('${esc(name)}')">🔗 双链 ${nbs.length}</span>` : '<span class="pill gray">暂无关联</span>'}
       ${mists.length ? `<span class="pill red" style="cursor:pointer" onclick="go('mist')" title="去错题本">📕 错题 ${mists.length} 条</span>` : ''}
       ${kpNoteCount(name) ? `<span class="pill amber" style="cursor:pointer" onclick="go('kb')" title="去知识库看这个知识点的全部笔记">📝 笔记 ${kpNoteCount(name)} 条</span>` : ''}
+      ${qNotes.length ? `<span class="pill violet" style="cursor:pointer" onclick="scrollKPNotes()" title="该知识点下每道题的笔记，点击跳到下方列表">✏️ 题目笔记 ${qNotes.length} 条</span>` : ''}
       <span style="flex:1"></span>
       <button class="sm ghost" data-kp="${esc(name)}" onclick="wsOpen(this.dataset.kp, this.dataset.kp)" title="联网查询这个知识点，可把结果存进知识库">🔍 联网查询</button>
       <button class="sm ghost" onclick="clearKPSelection()" title="取消选中（Esc / 点球体空白处）">✕ 取消选择</button>
@@ -4230,6 +4242,23 @@ function renderKPDetail(name) {
     <div class="row" style="margin-top:8px">
       <button class="ghost sm" id="kpn-tgl" onclick="toggleKPNote()">${noteRec ? '✏️ 编辑笔记' : '📝 添加笔记'}</button>
     </div>
+    ${/* ---- v1.45.0 题目笔记：题目上写的笔记自动归到它所属的知识点 ---- */''}
+    ${qNotes.length ? `<div id="kpQNotes" style="margin:14px 0 10px;padding-top:12px;border-top:1px dashed var(--border)">
+      <b>✏️ 题目笔记（${qNotes.length}）</b>
+      <span style="color:var(--muted);font-size:12px">复习或答题练习时在题目上方写的笔记，按知识点自动汇总到这里；此处看到的就是原题上的笔记，改它等于改原题</span>
+      <div class="row" style="margin:8px 0">
+        <button class="ghost sm" onclick="go('kb')" title="在知识库里按「✏️ 题目笔记」筛选">📚 去知识库看全部 →</button>
+      </div>
+      ${qNotes.map(q => `<div class="q-item">
+        <div class="q-head"><span class="pill violet">✏️ 题目笔记</span><span class="pill blue">${TYPES[q.type] || q.type}</span>
+          <span style="color:var(--muted);font-size:12px">${fmtDate(q.note_at)}</span><span style="flex:1"></span>
+          <button class="sm ghost" onclick="viewQuestion(${q.id})">题目详情</button>
+          <button class="sm ghost" data-qid="${q.id}" onclick="kbShowQuestion(+this.dataset.qid)">📖 看原题</button>
+          <button class="sm ghost" onclick="reviewQuestion(${q.id})" title="加入复习队列，可继续补笔记">🔁 复习</button></div>
+        <div class="q-content" style="font-size:13.5px;color:var(--muted)">${esc(clipText(q.content, 120))}</div>
+        <div class="q-note-show" style="margin-top:8px">📝 ${esc(qNote(q))}</div>
+      </div>`).join('')}
+    </div>` : ''}
     ${/* ---- 关联错题（与错题本双向联动） ---- */''}
     ${mists.length ? `<div style="margin:14px 0 10px;padding-top:12px;border-top:1px dashed var(--border)">
       <b>📕 关联错题（${mists.length}）</b> <span style="color:var(--muted);font-size:12px">与错题本双向联动：此处可复习错因与笔记</span>
@@ -4255,10 +4284,22 @@ function renderKPDetail(name) {
     </div>` : ''}
     ${qs.map(q => `<div class="q-item">
       <div class="q-head"><span class="pill blue">${TYPES[q.type]}</span><span class="pill gray">${DIFFS[q.difficulty] || ''}</span>
+        ${qNote(q) ? '<span class="pill violet">📝 有笔记</span>' : ''}
         <button class="sm ghost" onclick="viewQuestion(${q.id})">详情</button></div>
       <div class="q-content">${esc(q.content)}</div>
       <div class="q-ans"><b>答案：</b>${esc(q.answer)}</div>
+      ${qNote(q) ? `<div class="q-note-show" style="margin-top:8px">📝 <b>我的笔记</b>：${esc(qNote(q))}</div>` : ''}
     </div>`).join('')}</div>`;
+}
+/* v1.45.0：顶部「✏️ 题目笔记 N 条」胶囊 → 跳到本卡的题目笔记区 */
+function scrollKPNotes() {
+  const el = document.getElementById('kpQNotes');
+  if (!el) { toast('这个知识点下还没有题目笔记', 'err'); return; }
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.style.transition = 'background .5s';
+  const old = el.style.background;
+  el.style.background = 'var(--bg)';
+  setTimeout(() => { el.style.background = old || ''; }, 900);
 }
 /* ---------- 知识点笔记（存储在 kv.kpNotes，按知识点名索引） ---------- */
 /** 从错题本跳转到知识点图谱并选中该知识点（双向联动入口） */
@@ -4521,7 +4562,7 @@ function kbRenderList() {
     ? `<div class="kb-grid">${list.map(kbNoteCard).join('')}</div>`
     : `<div class="card"><div class="empty">${all.length
         ? '没有符合筛选条件的笔记<br>换个关键词，或把类型切回「全部」'
-        : '还没有任何笔记或收藏<br>复习或答题练习时在题目下方写「📝 我的笔记」、图谱里选中知识点写一条、错题本记笔记、联网查询里点「⭐ 收藏」，都会自动收进知识库'}</div></div>`;
+        : '还没有任何笔记或收藏<br>复习或答题练习时在题目上方写「📝 我的笔记」、图谱里选中知识点写一条、错题本记笔记、联网查询里点「⭐ 收藏」，都会自动收进知识库'}</div></div>`;
   const cnt = document.getElementById('kbCount');
   if (cnt) cnt.textContent = `当前显示 ${list.length} / ${all.length} 条`;
 }
@@ -5543,10 +5584,10 @@ function renderRevCard() {
       <span class="pill ${card.lapses ? 'red' : 'gray'}">${REV_STATES[cardState(card)]}</span>
       ${card.reps ? `<span class="pill gray">第 ${card.reps} 轮</span>` : ''}
       ${card.lapses ? `<span class="pill amber">遗忘 ${card.lapses} 次</span>` : ''}
-      ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，翻到下方可继续修改">📝 已记笔记</span>` : ''}
+      ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，在题目上方可继续修改">📝 已记笔记</span>` : ''}
     </div>
-    <div class="rev-q">${esc(q.content)}</div>
     ${qNoteHTML(q, 'sess' + card.id)}
+    <div class="rev-q">${esc(q.content)}</div>
     <div id="revAnsWrap" class="${mode === 'answer' ? '' : 'hidden'}" style="width:100%;text-align:left;margin-top:6px">
       <div id="revAnswerArea">${mode === 'answer' ? revAnsInput(q, card.id) : ''}</div>
       <div class="row" style="justify-content:center;margin-top:8px">
@@ -5860,6 +5901,7 @@ async function viewReview() {
           <button class="sm danger" onclick="delCard(${c.id})">移除</button></span></td>
       </tr>
       <tr id="rvrow-${c.id}" class="hidden"><td colspan="6" style="background:var(--bg)"><div class="mist-ans" id="rv-${c.id}" style="margin-top:0">
+        ${qNoteHTML(q, 'rv' + c.id)}
         <div style="color:var(--muted);font-size:12px;margin-bottom:8px">${esc(q?.content || '')}</div>
         <div id="rv-input-${c.id}">${revAnsInput(q, c.id)}</div>
         <div class="row" style="margin-top:10px">
@@ -5867,7 +5909,6 @@ async function viewReview() {
           <button class="ghost sm" onclick="toggleRevAns(${c.id})">收起</button>
         </div>
         <div id="rv-res-${c.id}"></div>
-        ${qNoteHTML(q, 'rv' + c.id)}
       </div></td></tr>`; }).join('')}</tbody></table>
       ${pages > 1 ? `<div class="pager"><button class="ghost" ${revView.page === 1 ? 'disabled' : ''} onclick="revPage(${revView.page - 1})">← 上一页</button>
         <span style="color:var(--muted);font-size:13px">第 ${revView.page} / ${pages} 页</span>
@@ -6145,8 +6186,8 @@ function renderQuiz() {
   <div class="q-item">
     <div class="q-head"><span class="pill blue">${TYPES[it.type]}</span><span class="pill gray">${DIFFS[it.difficulty] || it.difficulty}</span>
       ${it.knowledge_point ? `<span class="pill amber">${esc(it.knowledge_point)}</span>` : ''}</div>
-    <div class="q-content" style="font-size:16px">${esc(it.content)}</div>
     ${qNoteHTML(it, 'quiz' + it.id)}
+    <div class="q-content" style="font-size:16px">${esc(it.content)}</div>
     <div style="margin-top:10px" id="answerArea">
       ${renderAnswerInput(it, saved)}
     </div>
@@ -8316,7 +8357,7 @@ const HELP_SECTIONS = [
       </ul>
       <div class="help-h4">随手记笔记</div>
       <ul>
-        <li>题干下方有「📝 我的笔记」输入框：边做题边写思路、易错点和记忆口诀，<b>停手约 1 秒自动保存</b>，也可按 <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Enter</span> 立即保存。</li>
+        <li>题干上方有「📝 我的笔记」输入框：边做题边写思路、易错点和记忆口诀，<b>停手约 1 秒自动保存</b>，也可按 <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Enter</span> 立即保存。</li>
         <li>切题、点「下一题」或提交答案前会先把笔记存好；笔记存在题目上，下次再练到同一题会自动带出来，题库管理里也能查看修改。</li>
       </ul>
       <div class="help-h4">快捷键</div>
@@ -8411,7 +8452,7 @@ const HELP_SECTIONS = [
       <p><span class="help-kbd">空格</span> 显示答案 ｜ <span class="help-kbd">1</span> 忘记 ｜ <span class="help-kbd">2</span> 困难 ｜ <span class="help-kbd">3</span> 良好 ｜ <span class="help-kbd">4</span> 简单 ｜ <span class="help-kbd">Esc</span> 退出</p>
       <div class="help-h4">随手记笔记</div>
       <ul>
-        <li>每张卡题目下方都有「📝 我的笔记」输入框，边复习边写思路、易错点和记忆口诀，<b>输入停下约 1 秒就自动保存</b>，也可以按 <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Enter</span> 立即保存。</li>
+        <li>每张卡题目上方都有「📝 我的笔记」输入框，边复习边写思路、易错点和记忆口诀，<b>输入停下约 1 秒就自动保存</b>，也可以按 <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Enter</span> 立即保存。</li>
         <li>写完不用管，直接按 <span class="help-kbd">空格</span> 看答案或点档位评分，软件会先把笔记落盘再翻下一张。</li>
         <li>笔记跟着<b>题目</b>走：下次复习同一题会原样带出来，题库管理里有「📝 笔记」按钮可查看和修改，也会随自动备份、全量导出一起保存。</li>
         <li>卡片管理表格里，写过笔记的卡会标出「📝 有笔记」；搜索框也能搜到笔记内容。</li>
@@ -8460,6 +8501,7 @@ const HELP_SECTIONS = [
         <li><b>拖动</b>旋转球体，<b>滚轮</b>缩放，<b>悬停</b>弹出提示（知识点名、题量、正确率、章节、双链个数与分类）；<b>鼠标停在节点上时球体会自动停止旋转</b>，移开立刻继续，方便看清单个知识点。</li>
         <li><b>斥力调节</b>：右上角 <b>⇹</b> 按钮展开滑块（0.5×–2.5×，默认 1.0×）。三种双链全开、知识点很密时，把它<b>往右调大</b>——球面上的点会被推得更开、不再挤成一坨；点太散则往左调小。拖动时实时重排，松手后记住设置，点「默认」一键把当前这一组回到 1.0×。<b>斥力是按科目分别记忆的</b>：面板上会写明「适用于 全部科目 / 某科目」，你在「刑法」调到 1.6×、切到「民法」仍是它自己的值，互不影响——不同科目的知识点密度本来就不一样。</li>
         <li><b>单击</b>节点选中并在下方展开详情（双链标签、章节归属、题目、错题、笔记），点详情卡里的双链标签可<b>直接跳到那个知识点</b>；标签颜色对应关系类型（蓝=同题、灰=同章节、黄=题干相似）。</li>
+        <li><b>题目笔记自动挂到知识点</b>：复习或答题练习时在题目上方写的「📝 我的笔记」，会按这道题的知识点自动出现在对应知识点的详情卡里——标题旁的 <span class="pill violet">✏️ 题目笔记 N 条</span> 点一下跳到该区块，每条都能「📖 看原题」「🔁 复习」；题目列表里也会直接带出笔记。这里看到的就是原题上的笔记，改它等于改原题；节点上的琥珀小点和「只看有笔记」开关同样把题目笔记算进去。</li>
         <li><b>双击</b>节点弹出「双链」面板：双向关联的知识点（每条都标出是同题共现几道／同章节／题干相似百分比）、该知识点的全部题目、以及题目之间还共享哪些知识点。</li>
         <li><b>取消选中</b>：点球体空白处、按 <span class="kbd">Esc</span>，或点详情卡右上角「✕ 取消选择」；左上角浮标也会显示当前选中的知识点，点它的 ✕ 同样可取消。</li>
         <li>右上角浮层按钮：＋ 放大 ／ － 缩小 ／ ⟲ 重置视角 ／ ⏸ 暂停自动旋转 ／ ⛶ 全屏大图。</li>
@@ -8480,7 +8522,7 @@ const HELP_SECTIONS = [
     html: `<p>把平时写的笔记<b>自动汇总到一处</b>，并且每条都能回「知识点图谱」或原题定位。知识库不复制数据，只是把各处笔记集中展示、统一检索（联网查询的收藏也会自动收进来）：</p>
       <table class="help-table">
         <tr><th style="width:130px">来源</th><th>在哪写</th><th>存在哪</th></tr>
-        <tr><td>✏️ 题目笔记</td><td>复习、答题练习、卡片管理里题目下方的「📝 我的笔记」；或题库管理里的「📝 笔记」按钮</td><td>跟着题目本身走（questions.note），随题库备份与导出</td></tr>
+        <tr><td>✏️ 题目笔记</td><td>复习、答题练习、卡片管理里题目上方的「📝 我的笔记」；或题库管理里的「📝 笔记」按钮</td><td>跟着题目本身走（questions.note），随题库备份与导出</td></tr>
         <tr><td>📝 知识点笔记</td><td>图谱里单击知识点 → 详情卡「添加笔记」</td><td>按知识点名保存，一个知识点一条</td></tr>
         <tr><td>📕 错题笔记</td><td>错题本里点某道错题上的「📝 笔记」</td><td>跟着那条错题记录走</td></tr>
         <tr><td>🗒 知识库手记</td><td>本页「＋ 新建笔记」</td><td>随题库保存，可选关联一个知识点</td></tr>

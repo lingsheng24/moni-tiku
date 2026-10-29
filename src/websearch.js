@@ -846,10 +846,10 @@ function renderRevCard() {
       <span class="pill ${card.lapses ? 'red' : 'gray'}">${REV_STATES[cardState(card)]}</span>
       ${card.reps ? `<span class="pill gray">第 ${card.reps} 轮</span>` : ''}
       ${card.lapses ? `<span class="pill amber">遗忘 ${card.lapses} 次</span>` : ''}
-      ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，翻到下方可继续修改">📝 已记笔记</span>` : ''}
+      ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，在题目上方可继续修改">📝 已记笔记</span>` : ''}
     </div>
-    <div class="rev-q">${esc(q.content)}</div>
     ${qNoteHTML(q, 'sess' + card.id)}
+    <div class="rev-q">${esc(q.content)}</div>
     <div id="revAnsWrap" class="${mode === 'answer' ? '' : 'hidden'}" style="width:100%;text-align:left;margin-top:6px">
       <div id="revAnswerArea">${mode === 'answer' ? revAnsInput(q, card.id) : ''}</div>
       <div class="row" style="justify-content:center;margin-top:8px">

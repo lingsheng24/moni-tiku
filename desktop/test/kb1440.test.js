@@ -172,7 +172,7 @@ describe('知识库界面接入', () => {
   });
   test('知识库副标题与空状态都提到题目笔记', () => {
     expect(HTML).toContain('题目笔记、知识点笔记、错题笔记、手记、联网查询收藏都收在这里');
-    expect(HTML).toContain('复习或答题练习时在题目下方写「📝 我的笔记」');
+    expect(HTML).toContain('复习或答题练习时在题目上方写「📝 我的笔记」');
   });
   test('帮助手册知识库章列出五类来源', () => {
     expect(HTML).toContain('<tr><td>✏️ 题目笔记</td>');
