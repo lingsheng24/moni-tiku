@@ -620,11 +620,12 @@ body.is-desktop #toast{top:48px}
    错题本 / 统计 / 导出 / 设置
    ========================================================= */
 
+/* ==== BUILD:db:START ==== */
 /* ---------- 运行环境：网页版用 IndexedDB，桌面版走 Electron IPC ---------- */
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.40.0';
+const APP_VER = '1.41.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -693,6 +694,7 @@ else { DB.bkvGet = idbDriver.kvGet; DB.bkvSet = idbDriver.kvSet; }
 if (!DB.bkvGet) DB.bkvGet = DB.kvGet;
 if (!DB.bkvSet) DB.bkvSet = DB.kvSet;
 
+/* ==== BUILD:db:END ==== */
 /* ---------- 全局状态 ---------- */
 const state = {
   settings: {
@@ -4486,6 +4488,7 @@ async function kbDeleteNote(key) {
   if (curView === 'kb') viewKB();
   else if (curView === 'mist') viewMist();
 }
+/* ==== BUILD:websearch:START ==== */
 /* ---------- 联网查询（v1.36.0） ----------
  * 桌面版由主进程抓取 Bing 结果页并解析，渲染层画成卡片；
  * 「AI 解答」把搜索结果摘要作为参考资料交给模型综合讲解，避免凭空编造。
@@ -4740,7 +4743,7 @@ async function wsRun() {
   const q = (document.getElementById('wsQ')?.value || '').trim();
   if (!q) { toast('先输入要查询的内容', 'err'); return; }
   wsSugClose();
-  wsState.q = q; wsState.results = []; wsState.err = ''; wsState.loading = true;
+  wsState.q = q; wsState.results = []; wsState.err = ''; wsState.loading = true; wsState.degraded = [];
   wsState.ai = ''; wsState.aiErr = ''; wsState.aiMsgs = [];   // 新搜索 = 新对话
   wsRenderResults(); wsRenderAI();
   const canFetch = IS_DESKTOP && window.electronAPI && typeof window.electronAPI.webSearch === 'function';
@@ -4762,6 +4765,7 @@ async function wsRun() {
     if (!wsState) return;   // 等待期间面板被关掉（Esc / ✕），放弃后续渲染
     wsState.loading = false;
     wsState.results = Array.isArray(r && r.results) ? r.results : [];
+    wsState.degraded = Array.isArray(r && r.degraded) ? r.degraded : [];   // v1.41.0：本次启动内失效的引擎
     wsState.searchUrl = (r && r.searchUrl) || wsSearchUrl(q, wsState.engine);
     wsState.at = Date.now();
     if (!r || !r.ok) wsState.err = (r && r.error) || '联网查询失败，可能是网络不通或搜索被拦截';
@@ -4808,6 +4812,12 @@ function wsReplay(q) {
   if (inp) inp.value = q;
   wsRun();
 }
+/* v1.41.0 引擎健康度提示：某引擎连续多次解析不到结果（多半是对方改版）时，主进程
+ * 会自动跳过它并在结果里带上名单，这里以一行小字告知用户，避免误以为「结果变少了」。 */
+function wsDegradedNotice() {
+  if (!wsState || !Array.isArray(wsState.degraded) || !wsState.degraded.length) return '';
+  return `<div style="font-size:12px;color:#b45309;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:6px 10px;margin-bottom:8px">⚠️ ${esc(wsState.degraded.join('、'))}源暂时无法解析（可能改版或维护），已自动跳过；重启软件后会自动重试。</div>`;
+}
 function wsRenderResults() {
   const box = document.getElementById('wsResBox');
   if (!box || !wsState) return;
@@ -4831,10 +4841,10 @@ function wsRenderResults() {
     return;
   }
   if (!wsState.results.length) {
-    box.innerHTML = `<div class="ws-empty">没有查到结果。换个更具体的关键词试试（例如加上公式名、科目或「例题」）。</div>`;
+    box.innerHTML = wsDegradedNotice() + `<div class="ws-empty">没有查到结果。换个更具体的关键词试试（例如加上公式名、科目或「例题」）。</div>`;
     return;
   }
-  box.innerHTML = wsState.results.map((r, i) => `
+  box.innerHTML = wsDegradedNotice() + wsState.results.map((r, i) => `
     <div class="ws-res">
       <div class="ws-res-t" data-u="${esc(r.url)}" onclick="wsOpenLink(this.dataset.u)" title="用浏览器打开原文">${i + 1}. ${esc(r.title)}</div>
       <div class="ws-res-u">${esc(r.site || '')}${r.site ? ' · ' : ''}${esc(String(r.url).slice(0, 90))}</div>
@@ -5496,6 +5506,8 @@ async function autoEnqueueIds(ids) {
   if (n) await refreshData();
   return n;
 }
+
+/* ==== BUILD:websearch:END ==== */
 /* ---------- 卡片管理 ---------- */
 let revView = { kw: '', state: '', doc: '', subj: '', page: 1 };
 async function addReviewCards(ids) {
@@ -7276,6 +7288,28 @@ async function resetDataPath() {
   toast('已恢复默认位置：' + r.path, 'ok');
   viewSet();
 }
+/* ---------- v1.41.0 全量备份 / 恢复（所有题库 + 全局设置） ---------- */
+async function fullExport() {
+  try {
+    toast('正在打包全部数据…');
+    const r = await window.electronAPI.exportAll();
+    if (!r) return;
+    if (r.canceled) return;
+    if (!r.ok) { toast('导出失败：' + (r.error || '未知错误'), 'err'); return; }
+    toast(`已导出全部数据（${r.banks} 个题库）到：` + r.path, 'ok');
+  } catch (e) { toast('导出失败：' + String(e && e.message || e), 'err'); }
+}
+async function fullRestore() {
+  if (!confirm('⚠️ 全量恢复将用备份文件覆盖当前的所有题库与全局设置！\n\n恢复前程序会自动把当前数据完整留存一份（数据目录 backups/before-restore-…/，可回退）。\n\n确定继续？')) return;
+  try {
+    const r = await window.electronAPI.importAll();
+    if (!r) return;
+    if (r.canceled) return;
+    if (!r.ok) { toast('恢复失败：' + (r.error || '未知错误'), 'err'); return; }
+    alert(`恢复完成：${r.banks} 个题库已还原。\n恢复前的数据已留存于数据目录的 backups 文件夹，如需回退可联系该文件夹说明操作。`);
+    location.reload();   // 全量换数据文件，整页重载最干净
+  } catch (e) { toast('恢复失败：' + String(e && e.message || e), 'err'); }
+}
 /* ---------- 常用 AI 服务商预设（均为 OpenAI 兼容接口） ----------
  * models 为空表示该平台模型需自行填写（如火山方舟用接入点 ID）
  * 选服务商后自动填 Base URL 与可选模型，仍可随时切「自定义」手填 */
@@ -7563,6 +7597,11 @@ async function viewSet() {
       <button class="danger" id="sReset">${IS_DESKTOP ? '清空当前题库数据' : '清空全部数据'}</button>
       <input type="file" id="restoreIn" accept=".json" class="hidden">
     </div>
+    ${IS_DESKTOP ? `<div class="row" style="margin-top:8px">
+      <button class="ghost" onclick="fullExport()">📦 导出全部数据（含所有题库）</button>
+      <button class="ghost" onclick="fullRestore()">♻️ 从全量备份恢复…</button>
+      <span style="color:var(--muted);font-size:12px">换机迁移 / 整目录备份用；不含 API Key，恢复前会自动留存当前数据</span>
+    </div>` : ''}
     ${IS_DESKTOP ? `<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)">
       <div class="f"><span>数据文件位置</span>
         <div class="row" style="margin-top:6px">
@@ -8238,6 +8277,9 @@ const HELP_SECTIONS = [
       <ul>
         <li><b>导出全部数据（JSON 备份）</b>：把文档、题目、练习、考试、复习卡片一次性导出成一个 JSON 文件。<b>强烈建议定期备份。</b></li>
         <li><b>导入备份</b>：从 JSON 恢复数据，可用于换机迁移或回滚。</li>
+        <li><b>📦 导出全部数据（含所有题库）</b>（桌面版）：把<b>所有题库</b>和全局设置打包成一个 JSON 文件，换机迁移一步到位；备份文件不含 API Key。</li>
+        <li><b>♻️ 从全量备份恢复</b>（桌面版）：用全量备份覆盖当前所有数据；恢复前会自动把当前数据完整留存到数据目录的 <code>backups/before-restore-…/</code>，可回退。</li>
+        <li><b>自动备份</b>（桌面版）：程序每小时滚动留存一份上一版数据，每天首次启动把全部数据快照到 <code>backups/daily/日期/</code>（保留最近 7 天）；主文件损坏时启动会自动从备份恢复。「🗂 打开自动备份目录」可直接查看。</li>
         <li><b>清空全部数据</b>：不可恢复，执行前请备份。</li>
         <li><b>数据文件位置</b>（桌面版）：显示当前数据文件路径，可改到同步盘 / 移动硬盘实现多机同步，或一键恢复默认位置（迁移时不会丢数据）。</li>
       </ul>`,

@@ -15,7 +15,7 @@ const NAMES = [
   'wsEngineName', 'wsSearchUrl',
   'wsOpen', 'wsClose', 'wsEscHandler',
   'wsRun', 'wsPushHist', 'wsRenderHist',
-  'wsRenderResults', 'wsRenderAI',
+  'wsRenderResults', 'wsDegradedNotice', 'wsRenderAI',
   'wsAskAI', 'wsAskAIFromInput', 'wsAiMessages',
   'wsSugInput', 'wsSugRender', 'wsSugClose', 'wsSugNav', 'wsSugPick',
   'wsFavPush', 'wsFavSave', 'wsFavToggle', 'wsFavRender', 'wsFavDel', 'wsFavAddResult', 'wsFavAddAI', 'wsFavNote',

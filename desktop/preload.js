@@ -51,6 +51,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 打开数据所在文件夹 */
   openDataDir: () => invoke('app:openDataDir'),
   openBackupDir: () => invoke('app:openBackupDir'),
+  /** v1.41.0 全量备份 / 恢复（所有题库 + 全局设置，单 JSON 文件，主进程出对话框） */
+  exportAll: () => invoke('app:exportAll'),
+  importAll: () => invoke('app:importAll'),
   /** 联网查询：抓取搜索引擎结果并解析为 {title,url,snippet,site} 列表 */
   webSearch: (payload) => invoke('web:search', payload),
   /** 搜索联想词（v1.38.0）：输入提示，失败静默返回 { ok:true, items:[] } */

@@ -16,7 +16,11 @@ function loadMainSearch() {
   const b = src.indexOf('function registerWebSearch');
   if (a < 0 || b < 0 || b <= a) throw new Error('main.js 抠段失败');
   const seg = src.slice(a, b);
-  return new Function('require', seg + '\nreturn { parseBingResults, parseSogouResults, parseSoResults, searchWeb, SEARCH_ENGINES, AGG_ORDER };')(require);
+  /* v1.41.0：健康度调用在段内、引入在 main.js 头部（段外），这里补齐依赖（须在段前声明，避开 TDZ） */
+  const req = (name) => name === './engineHealth' ? require('../engineHealth') : require(name);
+  return new Function('require',
+    'const { createEngineHealth } = require("./engineHealth");\n' + seg
+    + '\nreturn { parseBingResults, parseSogouResults, parseSoResults, searchWeb, SEARCH_ENGINES, AGG_ORDER };')(req);
 }
 
 /* ---------- mini 样本（真实页面结构的最小复刻，特征均来自 2026-10 线上抓包） ---------- */

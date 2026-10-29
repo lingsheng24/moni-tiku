@@ -25,6 +25,9 @@ process.on('uncaughtException', e => blog('uncaughtException:', (e && e.stack) |
 process.on('unhandledRejection', e => blog('unhandledRejection:', (e && e.stack) || e));
 
 const { atomicWriteJson, rotateBackup, readJsonWithRecovery } = require('./safeSave');
+/* v1.41.0：全量备份容器与搜索引擎健康度（纯函数模块，见各自文件头注释） */
+const { buildBundle, parseBundle } = require('./backupBundle');
+const { createEngineHealth } = require('./engineHealth');
 let JSZip = null;
 try { JSZip = require('jszip'); } catch (e) { console.warn('jszip 未安装，试卷 Word 导出将不可用'); }
 
@@ -498,6 +501,78 @@ function regData() {
     } catch (_) { }
     shell.showItemInFolder(dataFile());
     return true;
+  });
+
+  /* ---- v1.41.0 全量备份 / 恢复：所有题库 + 全局设置打进一个 JSON 文件 ----
+   * 与「导出当前题库」互补：全量备份用于换机迁移 / 整目录恢复。
+   * 备份文件不含 API Key（见 backupBundle.js）；恢复前自动把当前数据留一份可回退。 */
+  ipcMain.handle('app:exportAll', async () => {
+    try {
+      saveBank();   // 当前题库先落盘，保证导出的是最新数据
+      const meta = loadMeta();
+      const banks = {};
+      const dir = banksDir();
+      if (fs.existsSync(dir)) {
+        for (const f of fs.readdirSync(dir)) {
+          if (!/^[a-z0-9]+\.json$/i.test(f)) continue;
+          banks[f.replace(/\.json$/i, '')] = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+        }
+      }
+      const bundle = buildBundle({ meta, banks, appVer: app.getVersion() });
+      const res = await dialog.showSaveDialog(win, {
+        title: '导出全部数据（含所有题库）',
+        defaultPath: '模拟题库全量备份_' + new Date().toISOString().slice(0, 10) + '.json',
+        filters: [{ name: 'JSON 全量备份', extensions: ['json'] }],
+        properties: ['createDirectory', 'showOverwriteConfirmation'],
+      });
+      if (res.canceled || !res.filePath) return { ok: false, canceled: true };
+      let target = res.filePath;
+      if (!target.toLowerCase().endsWith('.json')) target += '.json';
+      atomicWriteJson(target, bundle);
+      return { ok: true, path: target, banks: Object.keys(banks).length };
+    } catch (err) { return { ok: false, error: err.message }; }
+  });
+  ipcMain.handle('app:importAll', async () => {
+    try {
+      const res = await dialog.showOpenDialog(win, {
+        title: '从全量备份恢复（将覆盖当前全部数据）',
+        filters: [{ name: 'JSON 全量备份', extensions: ['json'] }],
+        properties: ['openFile'],
+      });
+      if (res.canceled || !res.filePaths || !res.filePaths[0]) return { ok: false, canceled: true };
+      let parsed;
+      try { parsed = parseBundle(JSON.parse(fs.readFileSync(res.filePaths[0], 'utf8'))); }
+      catch (e) { return { ok: false, error: '备份文件解析失败：' + e.message }; }
+      if (!parsed.ok) return { ok: false, error: parsed.error };
+      /* 恢复前先把当前数据完整留一份（backups/before-restore-时间戳/），可回退 */
+      const before = path.join(path.dirname(dataFile()), 'backups',
+        'before-restore-' + new Date().toISOString().replace(/[:.]/g, '-'));
+      fs.mkdirSync(path.join(before, 'banks'), { recursive: true });
+      if (fs.existsSync(dataFile())) fs.copyFileSync(dataFile(), path.join(before, 'data.json'));
+      const srcBanks = banksDir();
+      if (fs.existsSync(srcBanks)) {
+        for (const f of fs.readdirSync(srcBanks)) {
+          if (/^[a-z0-9]+\.json$/i.test(f)) fs.copyFileSync(path.join(srcBanks, f), path.join(before, 'banks', f));
+        }
+      }
+      /* 保留本机已填的 API Key（备份文件不带密钥；换机恢复时这里自然为空，重填即可） */
+      try {
+        const curSettings = (loadMeta().kv || {}).settings || {};
+        if (curSettings.apiKeyEnc || curSettings.apiKey) {
+          if (!parsed.meta.kv || typeof parsed.meta.kv !== 'object') parsed.meta.kv = {};
+          parsed.meta.kv.settings = {
+            ...(parsed.meta.kv && parsed.meta.kv.settings || {}),
+            ...(curSettings.apiKeyEnc ? { apiKeyEnc: curSettings.apiKeyEnc } : { apiKey: curSettings.apiKey }),
+          };
+        }
+      } catch (_) { }
+      fs.mkdirSync(banksDir(), { recursive: true });
+      atomicWriteJson(dataFile(), parsed.meta);
+      for (const id of Object.keys(parsed.banks)) atomicWriteJson(bankFile(id), parsed.banks[id]);
+      cache = null; bankCache = null; loadMeta(); loadCur();
+      blog('[数据] 全量恢复完成：', Object.keys(parsed.banks).length, '个题库；恢复前数据已留到 ', before);
+      return { ok: true, banks: Object.keys(parsed.banks).length };
+    } catch (err) { return { ok: false, error: err.message }; }
   });
 
   /* ---- 数据文件路径管理 ---- */
@@ -997,6 +1072,9 @@ function parseSoResults(html, limit = 10) {
   return out;
 }
 /** 单引擎抓取 + 解析，失败抛错（由上层决定回落/聚合） */
+/* v1.41.0 引擎健康度：某引擎连续 5 次「取回页面但解析 0 条」（多半是对方改版），
+ * 本次启动内标记失效——聚合与自动回落跳过它，省掉无效超时；重启自动重试。 */
+const engineHealth = createEngineHealth({ limit: 5 });
 async function fetchEngine(id, q, limit) {
   const eng = SEARCH_ENGINES[id];
   if (!eng) throw new Error('未知引擎 ' + id);
@@ -1004,12 +1082,16 @@ async function fetchEngine(id, q, limit) {
   const r = await httpsGet(searchUrl);
   if (r.status !== 200) throw new Error(`${eng.name} 返回 ${r.status}`);
   const results = eng.parse(r.text, limit);
+  engineHealth.mark(id, results.length > 0);
   if (!results.length) throw new Error(`${eng.name} 没有解析到结果`);
   return { ok: true, engine: id, engineName: eng.name, query: q, searchUrl, results };
 }
 /** 智能聚合：三路并发各取一批，交替合并去重（同 URL 或同标题前 24 字视为重复） */
 async function searchAggregate(q, limit) {
-  const settled = await Promise.allSettled(AGG_ORDER.map(id => fetchEngine(id, q, limit)));
+  /* v1.41.0：失效引擎不参与聚合（若全部失效则照旧全上，保底能搜） */
+  const healthy = AGG_ORDER.filter(id => !engineHealth.degraded(id));
+  const ids = healthy.length ? healthy : AGG_ORDER;
+  const settled = await Promise.allSettled(ids.map(id => fetchEngine(id, q, limit)));
   const goods = settled.filter(s => s.status === 'fulfilled').map(s => s.value);
   const errors = settled.filter(s => s.status === 'rejected')
     .map(s => String((s.reason && s.reason.message) || s.reason));
@@ -1041,9 +1123,10 @@ async function searchAggregate(q, limit) {
 async function searchWeb(q, engine = 'bingcn', limit = 10) {
   if (engine === 'aggregate') return searchAggregate(q, limit);
   const ids = Object.keys(SEARCH_ENGINES).filter(k => k !== 'aggregate');
+  /* v1.41.0：失效引擎排到队尾；用户显式选中的引擎仍最先尝试（尊重选择） */
   const order = ids.includes(engine)
-    ? [engine, ...ids.filter(k => k !== engine)]
-    : ['bingcn', 'sogou', 'so360', 'bing'];
+    ? [engine, ...engineHealth.orderFirst(ids.filter(k => k !== engine))]
+    : engineHealth.orderFirst(['bingcn', 'sogou', 'so360', 'bing']);
   const errors = [];
   for (const id of order) {
     try {
@@ -1059,7 +1142,12 @@ function registerWebSearch() {
   ipcMain.handle('web:search', async (e, { q, engine, limit } = {}) => {
     const query = String(q || '').trim();
     if (!query) return { ok: false, error: '查询内容为空', results: [] };
-    return searchWeb(query, engine, Math.min(Math.max(Number(limit) || 10, 1), 10));
+    const r = await searchWeb(query, engine, Math.min(Math.max(Number(limit) || 10, 1), 10));
+    /* v1.41.0：把本次启动内失效的引擎名带给前端，面板提示「xx源暂不可用，已自动切换」 */
+    r.degraded = engineHealth.degradedNames(
+      Object.keys(SEARCH_ENGINES).filter(k => k !== 'aggregate'),
+      id => SEARCH_ENGINES[id].name);
+    return r;
   });
   /* 搜索联想词（Bing 开放接口，返回 JSON 数组；失败静默返回空，不弹错） */
   ipcMain.handle('web:suggest', async (e, { q } = {}) => {
