@@ -12,7 +12,7 @@ const getJson = path => new Promise((resolve, reject) => {
 });
 (async () => {
   let list = null;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 60; i++) {
     try { list = await getJson('/json/list'); if (list && list.length) break; } catch (e) { }
     await sleep(500);
   }
