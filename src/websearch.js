@@ -846,8 +846,10 @@ function renderRevCard() {
       <span class="pill ${card.lapses ? 'red' : 'gray'}">${REV_STATES[cardState(card)]}</span>
       ${card.reps ? `<span class="pill gray">第 ${card.reps} 轮</span>` : ''}
       ${card.lapses ? `<span class="pill amber">遗忘 ${card.lapses} 次</span>` : ''}
+      ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，翻到下方可继续修改">📝 已记笔记</span>` : ''}
     </div>
     <div class="rev-q">${esc(q.content)}</div>
+    ${qNoteHTML(q, 'sess' + card.id)}
     <div id="revAnsWrap" class="${mode === 'answer' ? '' : 'hidden'}" style="width:100%;text-align:left;margin-top:6px">
       <div id="revAnswerArea">${mode === 'answer' ? revAnsInput(q, card.id) : ''}</div>
       <div class="row" style="justify-content:center;margin-top:8px">
@@ -878,6 +880,8 @@ function renderRevCard() {
     } else reveal('');
   };
   bindRevKeys(q, reveal);
+  revNoteFlush = null;
+  bindQNotes($('#view'), f => { revNoteFlush = f; });
 }
 /** 展开正确答案与评分网格（模块级：会话内「显示答案」与「提交答案」共用） */
 function revealRevAns(q, userAnswer) {
@@ -912,7 +916,7 @@ async function submitRevSession() {
   if (!rev) return;
   const card = rev.items[rev.idx];
   const q = state.questions.find(x => x.id === card.question_id);
-  if (!q) return;
+  if (!q) { toast('这道题的原题已被删除，已自动跳过', 'err'); rev.idx++; renderRevCard(); return; }
   const box = $('#revAnswerArea');
   let user = '';
   if (q.options && q.type !== 'true_false') {
@@ -926,27 +930,38 @@ async function submitRevSession() {
     if (!user) { toast('请先输入答案', 'err'); return; }
   }
   const goBtn = $('#revSubmit');
-  goBtn.disabled = true; goBtn.textContent = '判分中…';
+  if (goBtn) { goBtn.disabled = true; goBtn.textContent = '判分中…'; }
+  const resetBtn = () => { if (goBtn) { goBtn.disabled = false; goBtn.textContent = '提交答案'; } };
   let correct, aiNote = '';
-  if (q.type === 'short_answer' || isTextType(q.type) || (q.type === 'fill_blank' && /[一-龥]{4,}/.test(q.answer))) {
-    const r = await gradeSubjective({ type: q.type, answer: q.answer }, user);
-    if (r.correct === null) {
-      correct = confirm(`AI 判分不可用，请自评。\n\n你的答案：${user}\n参考答案：${q.answer}\n\n点击「确定」= 答对，「取消」= 答错`);
-    } else { correct = r.correct; aiNote = r.aiNote; }
-  } else {
-    correct = gradeObjective({ type: q.type, answer: q.answer }, user);
+  try {
+    if (q.type === 'short_answer' || isTextType(q.type) || (q.type === 'fill_blank' && /[一-龥]{4,}/.test(q.answer))) {
+      const r = await gradeSubjective({ type: q.type, answer: q.answer }, user);
+      if (r.correct === null) {
+        correct = confirm(`AI 判分不可用，请自评。\n\n你的答案：${user}\n参考答案：${q.answer}\n\n点击「确定」= 答对，「取消」= 答错`);
+      } else { correct = r.correct; aiNote = r.aiNote; }
+    } else {
+      correct = gradeObjective({ type: q.type, answer: q.answer }, user);
+    }
+  } catch (e) {
+    console.error('复习会话判分失败', e);
+    toast('判分失败：' + (e && e.message || e) + '，可再点一次提交', 'err');
+    resetBtn();
+    return;
   }
-  await DB.add('practice', { question_id: q.id, is_correct: correct ? 1 : 0, answered_at: Date.now() });
-  $('#revJudge').innerHTML = `
+  /* 练习记录写失败/超时只提示，不阻断判分结果展示（与 v1.42.1 同款加固） */
+  try { await dbWrite('practice', { question_id: q.id, is_correct: correct ? 1 : 0, answered_at: Date.now() }); }
+  catch (e) { console.error('practice 写入失败', e); toast('练习记录保存失败：' + (e && e.message || e), 'err'); }
+  const judge = $('#revJudge');
+  if (judge) judge.innerHTML = `
     <div class="q-ans" style="margin-top:10px">
       <b style="color:${correct ? 'var(--green)' : 'var(--red)'}">${correct ? '✔ 回答正确' : '✘ 回答错误'}</b>　你的答案：${esc(user)}
       ${aiNote ? `<br><span style="color:var(--muted)">AI 点评：${esc(aiNote)}</span>` : ''}
       ${q.explanation ? `<br><span style="color:var(--muted)">解析：${esc(q.explanation)}</span>` : ''}
     </div>
     <div style="color:var(--muted);font-size:12px;margin-top:4px">请根据掌握程度评分（对错仅作参考）</div>`;
-  goBtn.disabled = true;   // 已判分，防止重复提交
+  if (goBtn) { goBtn.disabled = true; goBtn.textContent = '已判分 ✓'; }   // 文案复位，别一直挂「判分中…」
   revealRevAns(q, '');     // 展开正确答案与评分网格
-  await refreshData();
+  try { await dbRefresh(); } catch (e) { console.error('刷新失败', e); }
 }
 function readRevInput(q) {
   const area = $('#revAnswerArea');
@@ -966,6 +981,7 @@ function hintPill(q, u) {
 async function rateRev(g) {
   const card = rev.items[rev.idx];
   if (card.__rated) return;
+  if (revNoteFlush) { try { await revNoteFlush(); } catch (e) { } }   // 翻卡前先把笔记落盘
   const up = sm2(card, g);
   card.__rated = g;
   Object.assign(card, up);

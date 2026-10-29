@@ -505,6 +505,15 @@ body.is-desktop .modal-mask{top:36px}
 .mist-ans{margin-top:10px;padding:12px;border:1px dashed var(--border);border-radius:10px;background:var(--bg)}
 .mist-note-show{margin-top:8px;padding:8px 12px;border-left:3px solid var(--amber);background:var(--bg);border-radius:0 8px 8px 0;font-size:13px;color:var(--text);white-space:pre-wrap;word-break:break-word}
 .mist-note-edit textarea{width:100%;min-height:88px;margin-top:8px}
+/* ---------- 题目笔记（v1.43.0）：复习时随手记，输入即自动保存 ---------- */
+.qnote{margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);width:100%;text-align:left}
+.qnote-hd{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:6px}
+.qnote-hd b{color:var(--primary);font-size:12.5px;font-weight:600}
+.qnote-tip{margin-left:auto;font-size:11.5px;color:var(--muted)}
+.qnote-tip.err{color:var(--red)}
+.qnote textarea{width:100%;min-height:64px;resize:vertical;font-size:13.5px;line-height:1.75}
+.q-note-show{margin-top:8px;padding:8px 12px;border-left:3px solid var(--primary);background:var(--bg);
+  border-radius:0 8px 8px 0;font-size:13px;color:var(--text);white-space:pre-wrap;word-break:break-word}
 /* ---------- 间隔复习 ---------- */
 .rev-card{min-height:210px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:26px 20px}
 .rev-q{font-size:19px;line-height:1.7;font-weight:500;margin-bottom:14px}
@@ -625,7 +634,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.42.1';
+const APP_VER = '1.43.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -1613,6 +1622,68 @@ const AI_GRADE_TIMEOUT_MS = 25000;   // 单题 AI 判分上限（含重试），
  * 否则一场 30~50 题的考试会逐题各等 25 秒，用户看到的就是「一直判分中」 */
 let aiGradeDownUntil = 0;
 const AI_GRADE_COOLDOWN_MS = 5 * 60000;
+const dbPut = (store, val, ms = 12000) => withTimeoutP(DB.put(store, val), ms, DB_TIMEOUT);
+/* ---------- 题目笔记（v1.43.0） ----------
+ * 存在 questions[].note 上：不新增表、不用迁移，随题库一起自动备份 / 全量导出 / 换机恢复；
+ * 编辑题目用的是 Object.assign，笔记字段不会被覆盖。
+ * 复习会话、卡片管理行内答题、题库浏览三处共用同一份数据。 */
+function qNote(q) { return q && typeof q.note === 'string' ? q.note : ''; }
+/** 保存题目笔记。trim 后与旧值一致直接跳过；写盘超时/失败回滚内存值，避免界面与磁盘不一致 */
+async function saveQNote(qid, text, silent) {
+  const q = state.questions.find(x => x.id === qid);
+  if (!q) { if (!silent) toast('原题已删除，笔记无法保存', 'err'); return false; }
+  const t = String(text == null ? '' : text).trim();
+  if ((q.note || '') === t) return true;
+  const old = q.note, oldAt = q.note_at;
+  q.note = t; q.note_at = t ? Date.now() : 0;
+  try {
+    if (await dbPut('questions', { ...q }) === DB_TIMEOUT) throw new Error('写入超时');
+    return true;
+  } catch (e) {
+    q.note = old; q.note_at = oldAt;
+    if (!silent) toast('笔记保存失败：' + (e && e.message || e), 'err');
+    return false;
+  }
+}
+/** 笔记输入框：cid 只用于拼 DOM id（同一题可能同时出现在多个视图），data-qid 决定存到哪道题 */
+function qNoteHTML(q, cid) {
+  const t = qNote(q);
+  return `<div class="qnote">
+    <div class="qnote-hd"><b>📝 我的笔记</b><span class="qnote-tip" id="qnt-${cid}">${t ? '已保存 · ' + fmtDate(q.note_at) : '边复习边记，输入即自动保存'}</span></div>
+    <textarea class="qnote-ta" id="qn-${cid}" data-cid="${cid}" data-qid="${q.id}" rows="2"
+      placeholder="写下思路、易错点、记忆口诀…（Ctrl+Enter 立即保存）">${esc(t)}</textarea>
+  </div>`;
+}
+/** 绑定页面上所有笔记框：输入 900ms 防抖 + 失焦立即落盘；register 拿到 flush，供翻页/评分前强制保存 */
+function bindQNotes(root, register) {
+  (root || document).querySelectorAll('textarea.qnote-ta').forEach(ta => {
+    if (ta.dataset.qnBound) return;
+    ta.dataset.qnBound = '1';
+    const cid = ta.dataset.cid, qid = +ta.dataset.qid, tip = $('#qnt-' + cid);
+    let timer = null, dirty = false;
+    const flush = async () => {
+      clearTimeout(timer);
+      if (!dirty) return true;
+      dirty = false;
+      const ok = await saveQNote(qid, ta.value, true);
+      if (tip) {
+        tip.textContent = ok ? '已保存 · ' + fmtDate(Date.now()) : '保存失败，改一下内容即可重试';
+        tip.classList.toggle('err', !ok);
+      }
+      if (!ok) dirty = true;
+      return ok;
+    };
+    ta.addEventListener('input', () => { dirty = true; clearTimeout(timer); timer = setTimeout(flush, 900); });
+    ta.addEventListener('blur', () => { flush(); });
+    ta.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); dirty = true; flush(); }
+      e.stopPropagation();   // 别让 1/2/3/4、空格穿透到评分快捷键
+    });
+    if (register) register(flush);
+  });
+}
+/* 当前复习会话里笔记的强制落盘句柄：翻卡/评分前调用，防止还在防抖窗口内就切走 */
+let revNoteFlush = null;
 async function gradeSubjective(q, user) {
   if (state.settings.grading === 'self') return { correct: null, aiNote: '' };
   if (Date.now() < aiGradeDownUntil) return { correct: null, aiNote: '', error: true, circuit: true };
@@ -2375,6 +2446,7 @@ function viewQuestion(id) {
       ${q.explanation ? `<br><b style="color:var(--muted)">解析：</b>${esc(q.explanation)}` : ''}
       ${q.knowledge_point ? `<br><b style="color:var(--muted)">知识点：</b>${esc(q.knowledge_point)}` : ''}</div>
     ${q.source_excerpt ? `<div class="q-src">📎 原文出处：${esc(q.source_excerpt)}</div>` : ''}
+    ${qNote(q) ? `<div class="q-note-show">📝 <b>我的笔记</b>：${esc(qNote(q))}</div>` : ''}
     <dl class="kv" style="margin-top:12px">
       <dt>来源文档</dt><dd>${doc ? esc(doc.title) : '—'}</dd>
       <dt>练习记录</dt><dd>${pc.length} 次${rate !== null ? `，正确率 ${rate}%` : ''}</dd>
@@ -2611,7 +2683,7 @@ async function viewBank() {
     (!bankFilter.diff || q.difficulty === bankFilter.diff));
   if (bankFilter.kw) {
     const k = bankFilter.kw.toLowerCase();
-    qs = qs.filter(q => (q.content + q.answer + (q.explanation || '') + (q.knowledge_point || '')).toLowerCase().includes(k));
+    qs = qs.filter(q => (q.content + q.answer + (q.explanation || '') + (q.knowledge_point || '') + (q.note || '')).toLowerCase().includes(k));
   }
   const pages = Math.max(1, Math.ceil(qs.length / PAGE_SIZE));
   if (bankPage > pages) bankPage = pages;
@@ -2653,6 +2725,7 @@ async function viewBank() {
         ${doc ? `<span class="pill gray">📄 ${esc(doc.title)}</span>` : ''}
         ${rate !== null ? `<span class="pill ${rate >= 70 ? 'green' : 'red'}">正确率 ${rate}% (${pc.length})</span>` : ''}
         <span style="flex:1"></span>
+        <button class="sm ghost" onclick="editQNote(${q.id})">📝 笔记</button>
         <button class="sm ghost" onclick="editQ(${q.id})">编辑</button>
         <button class="sm ghost" onclick="reviewQuestion(${q.id})">🔁 复习</button>
         <button class="sm danger" onclick="delQ(${q.id})">删除</button></div>
@@ -2660,6 +2733,7 @@ async function viewBank() {
       ${q.options ? q.options.map(o => `<div class="q-opt">${esc(o)}</div>`).join('') : ''}
       <div class="q-ans"><b>答案：</b>${esc(q.answer)}${q.explanation ? `<br><b style="color:var(--muted)">解析：</b>${esc(q.explanation)}` : ''}</div>
       ${q.source_excerpt ? `<div class="q-src">📎 原文：${esc(q.source_excerpt)}</div>` : ''}
+      <div id="qns-${q.id}">${qNote(q) ? `<div class="q-note-show">📝 <b>我的笔记</b>：${esc(qNote(q))}</div>` : ''}</div>
     </div>`;
   }).join('') : '<div class="card"><div class="empty">没有符合条件的题目</div></div>'}
   </div>
@@ -2694,6 +2768,34 @@ async function delSelected() {
   bankSel.clear(); await refreshData(); viewBank(); toast('已删除所选题目', 'ok');
 }
 /* 编辑题目 */
+/** 题目笔记弹窗（题库管理用）：保存后只更新该卡片里的展示区，不整页重绘，避免翻页与滚动位置丢失 */
+function editQNote(qid) {
+  const q = state.questions.find(x => x.id === qid);
+  if (!q) { toast('题目不存在', 'err'); return; }
+  const head = String(q.content || '').slice(0, 70);
+  modal(`<h3 style="margin-bottom:10px">📝 题目笔记</h3>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">${esc(head)}${String(q.content || '').length > 70 ? '…' : ''}</div>
+    <label class="f"><span>我的笔记</span><textarea id="qnEdit" rows="6" placeholder="思路、易错点、记忆口诀…（随题目一起自动备份与导出）">${esc(qNote(q))}</textarea></label>
+    <div class="row" style="justify-content:flex-end">
+      ${qNote(q) ? '<button class="ghost" id="qnClear">清空笔记</button>' : ''}
+      <button class="ghost" onclick="closeModal()">取消</button>
+      <button class="primary" id="qnSave">💾 保存</button>
+    </div>`);
+  const done = () => {
+    closeModal();
+    const box = $('#qns-' + qid);
+    if (box) box.innerHTML = qNote(q) ? `<div class="q-note-show">📝 <b>我的笔记</b>：${esc(qNote(q))}</div>` : '';
+  };
+  $('#qnSave').onclick = async () => {
+    if (!await saveQNote(qid, $('#qnEdit').value)) return;
+    done(); toast(qNote(q) ? '笔记已保存' : '笔记已清空', 'ok');
+  };
+  if ($('#qnClear')) $('#qnClear').onclick = async () => {
+    if (!confirm('清空这道题的笔记？')) return;
+    if (!await saveQNote(qid, '')) return;
+    done(); toast('笔记已清空', 'ok');
+  };
+}
 async function editQ(id) {
   const q = await DB.get('questions', id);
   const optText = Array.isArray(q.options) ? q.options.join('\n') : '';
@@ -2743,7 +2845,7 @@ function filteredQuestions() {
     (!bankFilter.diff || q.difficulty === bankFilter.diff));
   if (bankFilter.kw) {
     const k = bankFilter.kw.toLowerCase();
-    qs = qs.filter(q => (q.content + q.answer + (q.explanation || '') + (q.knowledge_point || '')).toLowerCase().includes(k));
+    qs = qs.filter(q => (q.content + q.answer + (q.explanation || '') + (q.knowledge_point || '') + (q.note || '')).toLowerCase().includes(k));
   }
   return qs;
 }
@@ -5386,8 +5488,10 @@ function renderRevCard() {
       <span class="pill ${card.lapses ? 'red' : 'gray'}">${REV_STATES[cardState(card)]}</span>
       ${card.reps ? `<span class="pill gray">第 ${card.reps} 轮</span>` : ''}
       ${card.lapses ? `<span class="pill amber">遗忘 ${card.lapses} 次</span>` : ''}
+      ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，翻到下方可继续修改">📝 已记笔记</span>` : ''}
     </div>
     <div class="rev-q">${esc(q.content)}</div>
+    ${qNoteHTML(q, 'sess' + card.id)}
     <div id="revAnsWrap" class="${mode === 'answer' ? '' : 'hidden'}" style="width:100%;text-align:left;margin-top:6px">
       <div id="revAnswerArea">${mode === 'answer' ? revAnsInput(q, card.id) : ''}</div>
       <div class="row" style="justify-content:center;margin-top:8px">
@@ -5418,6 +5522,8 @@ function renderRevCard() {
     } else reveal('');
   };
   bindRevKeys(q, reveal);
+  revNoteFlush = null;
+  bindQNotes($('#view'), f => { revNoteFlush = f; });
 }
 /** 展开正确答案与评分网格（模块级：会话内「显示答案」与「提交答案」共用） */
 function revealRevAns(q, userAnswer) {
@@ -5452,7 +5558,7 @@ async function submitRevSession() {
   if (!rev) return;
   const card = rev.items[rev.idx];
   const q = state.questions.find(x => x.id === card.question_id);
-  if (!q) return;
+  if (!q) { toast('这道题的原题已被删除，已自动跳过', 'err'); rev.idx++; renderRevCard(); return; }
   const box = $('#revAnswerArea');
   let user = '';
   if (q.options && q.type !== 'true_false') {
@@ -5466,27 +5572,38 @@ async function submitRevSession() {
     if (!user) { toast('请先输入答案', 'err'); return; }
   }
   const goBtn = $('#revSubmit');
-  goBtn.disabled = true; goBtn.textContent = '判分中…';
+  if (goBtn) { goBtn.disabled = true; goBtn.textContent = '判分中…'; }
+  const resetBtn = () => { if (goBtn) { goBtn.disabled = false; goBtn.textContent = '提交答案'; } };
   let correct, aiNote = '';
-  if (q.type === 'short_answer' || isTextType(q.type) || (q.type === 'fill_blank' && /[一-龥]{4,}/.test(q.answer))) {
-    const r = await gradeSubjective({ type: q.type, answer: q.answer }, user);
-    if (r.correct === null) {
-      correct = confirm(`AI 判分不可用，请自评。\n\n你的答案：${user}\n参考答案：${q.answer}\n\n点击「确定」= 答对，「取消」= 答错`);
-    } else { correct = r.correct; aiNote = r.aiNote; }
-  } else {
-    correct = gradeObjective({ type: q.type, answer: q.answer }, user);
+  try {
+    if (q.type === 'short_answer' || isTextType(q.type) || (q.type === 'fill_blank' && /[一-龥]{4,}/.test(q.answer))) {
+      const r = await gradeSubjective({ type: q.type, answer: q.answer }, user);
+      if (r.correct === null) {
+        correct = confirm(`AI 判分不可用，请自评。\n\n你的答案：${user}\n参考答案：${q.answer}\n\n点击「确定」= 答对，「取消」= 答错`);
+      } else { correct = r.correct; aiNote = r.aiNote; }
+    } else {
+      correct = gradeObjective({ type: q.type, answer: q.answer }, user);
+    }
+  } catch (e) {
+    console.error('复习会话判分失败', e);
+    toast('判分失败：' + (e && e.message || e) + '，可再点一次提交', 'err');
+    resetBtn();
+    return;
   }
-  await DB.add('practice', { question_id: q.id, is_correct: correct ? 1 : 0, answered_at: Date.now() });
-  $('#revJudge').innerHTML = `
+  /* 练习记录写失败/超时只提示，不阻断判分结果展示（与 v1.42.1 同款加固） */
+  try { await dbWrite('practice', { question_id: q.id, is_correct: correct ? 1 : 0, answered_at: Date.now() }); }
+  catch (e) { console.error('practice 写入失败', e); toast('练习记录保存失败：' + (e && e.message || e), 'err'); }
+  const judge = $('#revJudge');
+  if (judge) judge.innerHTML = `
     <div class="q-ans" style="margin-top:10px">
       <b style="color:${correct ? 'var(--green)' : 'var(--red)'}">${correct ? '✔ 回答正确' : '✘ 回答错误'}</b>　你的答案：${esc(user)}
       ${aiNote ? `<br><span style="color:var(--muted)">AI 点评：${esc(aiNote)}</span>` : ''}
       ${q.explanation ? `<br><span style="color:var(--muted)">解析：${esc(q.explanation)}</span>` : ''}
     </div>
     <div style="color:var(--muted);font-size:12px;margin-top:4px">请根据掌握程度评分（对错仅作参考）</div>`;
-  goBtn.disabled = true;   // 已判分，防止重复提交
+  if (goBtn) { goBtn.disabled = true; goBtn.textContent = '已判分 ✓'; }   // 文案复位，别一直挂「判分中…」
   revealRevAns(q, '');     // 展开正确答案与评分网格
-  await refreshData();
+  try { await dbRefresh(); } catch (e) { console.error('刷新失败', e); }
 }
 function readRevInput(q) {
   const area = $('#revAnswerArea');
@@ -5506,6 +5623,7 @@ function hintPill(q, u) {
 async function rateRev(g) {
   const card = rev.items[rev.idx];
   if (card.__rated) return;
+  if (revNoteFlush) { try { await revNoteFlush(); } catch (e) { } }   // 翻卡前先把笔记落盘
   const up = sm2(card, g);
   card.__rated = g;
   Object.assign(card, up);
@@ -5606,7 +5724,7 @@ async function viewReview() {
     if (revView.state && st !== revView.state) return false;
     if (revView.subj && !matchSubject(q, revView.subj)) return false;
     if (revView.doc && String(q?.document_id) !== revView.doc) return false;
-    if (revView.kw) { const k = revView.kw.toLowerCase(); const t = ((q?.content || '') + (q?.answer || '') + (q?.knowledge_point || '')).toLowerCase(); if (!t.includes(k)) return false; }
+    if (revView.kw) { const k = revView.kw.toLowerCase(); const t = ((q?.content || '') + (q?.answer || '') + (q?.knowledge_point || '') + (q?.note || '')).toLowerCase(); if (!t.includes(k)) return false; }
     return true;
   }).sort((a, b) => (a.due || 0) - (b.due || 0));
   const perPage = 20, pages = Math.max(1, Math.ceil(filtered.length / perPage));
@@ -5675,7 +5793,7 @@ async function viewReview() {
     ${pageItems.length ? `<table class="tbl"><thead><tr><th>题目</th><th style="width:78px">阶段</th><th style="width:96px">下次复习</th><th style="width:74px">间隔</th><th style="width:64px">轮次</th><th style="width:196px"></th></tr></thead><tbody>
       ${pageItems.map(c => { const q = state.questions.find(x => x.id === c.question_id); const st = cardState(c); return `<tr>
         <td>${esc((q?.content || '').slice(0, 46))}${String(q?.content || '').length > 46 ? '…' : ''}
-          <div style="color:var(--muted);font-size:11px"><span class="pill blue">${TYPES[q?.type] || ''}</span> 难度系数 ${c.ease ?? 2.5}${c.lapses ? ` · 遗忘 ${c.lapses} 次` : ''}</div></td>
+          <div style="color:var(--muted);font-size:11px"><span class="pill blue">${TYPES[q?.type] || ''}</span> 难度系数 ${c.ease ?? 2.5}${c.lapses ? ` · 遗忘 ${c.lapses} 次` : ''}${qNote(q) ? ' · 📝 有笔记' : ''}</div></td>
         <td><span class="pill ${st === 'mature' ? 'green' : st === 'young' ? 'blue' : st === 'learning' ? 'amber' : 'gray'}">${REV_STATES[st]}</span></td>
         <td style="color:${c.due <= now ? 'var(--red)' : 'var(--muted)'};font-size:12px">${dueLabel(c.due)}</td>
         <td style="font-size:12px;color:var(--muted)">${ivlLabel(c.interval)}</td>
@@ -5694,6 +5812,7 @@ async function viewReview() {
           <button class="ghost sm" onclick="toggleRevAns(${c.id})">收起</button>
         </div>
         <div id="rv-res-${c.id}"></div>
+        ${qNoteHTML(q, 'rv' + c.id)}
       </div></td></tr>`; }).join('')}</tbody></table>
       ${pages > 1 ? `<div class="pager"><button class="ghost" ${revView.page === 1 ? 'disabled' : ''} onclick="revPage(${revView.page - 1})">← 上一页</button>
         <span style="color:var(--muted);font-size:13px">第 ${revView.page} / ${pages} 页</span>
@@ -5728,6 +5847,7 @@ async function viewReview() {
     await DB.kvSet('settings', { ...state.settings });
     toast('复习参数已保存', 'ok'); viewReview();
   };
+  bindQNotes($('#view'));   // 卡片管理行内答题区的笔记框
 }
 function revPage(p) { revView.page = p; viewReview(); window.scrollTo(0, document.body.scrollHeight); }
 /* ---------- 卡片管理行内答题区（判分与错题本同款，答后可联动 SM-2 调度） ---------- */
@@ -5863,6 +5983,8 @@ function bindRevKeys(q, reveal) {
 
 /* ============ 答题练习 ============ */
 let quiz = null;
+/* 练习页笔记的强制落盘句柄（v1.43.0）：切题 / 提交前先把笔记写完 */
+let quizNoteFlush = null;
 async function viewPractice() {
   if (quiz && !quiz.finished) { renderQuiz(); return; }
   quiz = null;
@@ -5969,6 +6091,7 @@ function renderQuiz() {
     <div class="q-head"><span class="pill blue">${TYPES[it.type]}</span><span class="pill gray">${DIFFS[it.difficulty] || it.difficulty}</span>
       ${it.knowledge_point ? `<span class="pill amber">${esc(it.knowledge_point)}</span>` : ''}</div>
     <div class="q-content" style="font-size:16px">${esc(it.content)}</div>
+    ${qNoteHTML(it, 'quiz' + it.id)}
     <div style="margin-top:10px" id="answerArea">
       ${renderAnswerInput(it, saved)}
     </div>
@@ -6000,9 +6123,15 @@ function renderQuiz() {
   const submit = $('#submitBtn'), next = $('#nextBtn');
   if (submit) submit.onclick = () => submitAnswer(it);
   next.onclick = () => nextQuestion();
+  quizNoteFlush = null;
+  bindQNotes($('#view'), f => { quizNoteFlush = f; });   // 练习题也支持随手记笔记
 }
-function goQuestion(i) { quiz.idx = i; renderQuiz(); }
-function nextQuestion() {
+async function goQuestion(i) {
+  if (quizNoteFlush) { try { await quizNoteFlush(); } catch (e) { } }
+  quiz.idx = i; renderQuiz();
+}
+async function nextQuestion() {
+  if (quizNoteFlush) { try { await quizNoteFlush(); } catch (e) { } }
   const { items } = quiz;
   if (quiz.idx === items.length - 1) {
     const un = quiz.answers.map((a, i) => a ? -1 : i).filter(i => i >= 0);
@@ -6077,6 +6206,7 @@ function renderAnswerInput(it, saved) {
   return `<textarea id="subAns" placeholder="在此输入你的答案…" ${saved.done ? 'disabled' : ''}>${esc(saved.user || '')}</textarea>`;
 }
 async function submitAnswer(it) {
+  if (quizNoteFlush) { try { await quizNoteFlush(); } catch (e) { } }   // 提交前先把笔记落盘
   const saved = quiz.answers[quiz.idx] = quiz.answers[quiz.idx] || {};
   if (saved.done) return;
   let user = '';
@@ -8129,6 +8259,11 @@ const HELP_SECTIONS = [
         <li>提交后：客观题（选择、判断、填空）<b>本地精确判分</b>；简答题按「系统设置 → 判分方式」走 <b>AI 语义判分</b>或<b>手动自评</b>。没配 API Key 时自动降级为自评。</li>
         <li>答完一题会立刻显示对错、正确答案和解析。</li>
       </ul>
+      <div class="help-h4">随手记笔记</div>
+      <ul>
+        <li>题干下方有「📝 我的笔记」输入框：边做题边写思路、易错点和记忆口诀，<b>停手约 1 秒自动保存</b>，也可按 <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Enter</span> 立即保存。</li>
+        <li>切题、点「下一题」或提交答案前会先把笔记存好；笔记存在题目上，下次再练到同一题会自动带出来，题库管理里也能查看修改。</li>
+      </ul>
       <div class="help-h4">快捷键</div>
       <p><span class="help-kbd">A</span> <span class="help-kbd">B</span> <span class="help-kbd">C</span> <span class="help-kbd">D</span> 或 <span class="help-kbd">1</span>–<span class="help-kbd">4</span> 选选项 ｜ <span class="help-kbd">Enter</span> 提交 ｜ <span class="help-kbd">→</span> 下一题</p>
       <div class="help-h4">作答导航</div>
@@ -8219,6 +8354,13 @@ const HELP_SECTIONS = [
       <p>每个档位按钮上会直接显示「N 天后再来」，选之前就知道后果。</p>
       <div class="help-h4">快捷键</div>
       <p><span class="help-kbd">空格</span> 显示答案 ｜ <span class="help-kbd">1</span> 忘记 ｜ <span class="help-kbd">2</span> 困难 ｜ <span class="help-kbd">3</span> 良好 ｜ <span class="help-kbd">4</span> 简单 ｜ <span class="help-kbd">Esc</span> 退出</p>
+      <div class="help-h4">随手记笔记</div>
+      <ul>
+        <li>每张卡题目下方都有「📝 我的笔记」输入框，边复习边写思路、易错点和记忆口诀，<b>输入停下约 1 秒就自动保存</b>，也可以按 <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Enter</span> 立即保存。</li>
+        <li>写完不用管，直接按 <span class="help-kbd">空格</span> 看答案或点档位评分，软件会先把笔记落盘再翻下一张。</li>
+        <li>笔记跟着<b>题目</b>走：下次复习同一题会原样带出来，题库管理里有「📝 笔记」按钮可查看和修改，也会随自动备份、全量导出一起保存。</li>
+        <li>卡片管理表格里，写过笔记的卡会标出「📝 有笔记」；搜索框也能搜到笔记内容。</li>
+      </ul>
       <div class="help-h4">卡片管理</div>
       <ul>
         <li>表格列出所有卡片：题目、阶段（未学习 / 学习中 / 记忆期 / 已掌握）、下次复习时间、当前间隔、复习轮次。到期未复习的时间会标红。</li>
