@@ -625,7 +625,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.42.0';
+const APP_VER = '1.42.1';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -1597,17 +1597,41 @@ function gradeObjective(q, user) {
   }
   return normAns(user) === normAns(q.answer);
 }
+/* 给可能卡住的异步任务加硬超时：超时返回 fallback，绝不无限等待
+ * v1.42.1：判分链路全部走这里，避免 AI 接口不响应时按钮永远停在「判分中…」 */
+function withTimeoutP(p, ms, fallback) {
+  let timer;
+  const guard = new Promise(res => { timer = setTimeout(() => res(fallback), ms); });
+  return Promise.race([Promise.resolve(p), guard]).finally(() => clearTimeout(timer));
+}
+/* v1.42.1：数据通道也可能被慢盘/杀软拖住，写入一律带超时，绝不把判分界面挂在 await 上 */
+const DB_TIMEOUT = Symbol('db-timeout');
+const dbWrite = (store, val, ms = 12000) => withTimeoutP(DB.add(store, val), ms, DB_TIMEOUT);
+const dbRefresh = (ms = 20000) => withTimeoutP(refreshData(), ms, DB_TIMEOUT);
+const AI_GRADE_TIMEOUT_MS = 25000;   // 单题 AI 判分上限（含重试），超时转自评
+/* AI 判分熔断：一次失败/超时后 5 分钟内不再尝试，直接转自评
+ * 否则一场 30~50 题的考试会逐题各等 25 秒，用户看到的就是「一直判分中」 */
+let aiGradeDownUntil = 0;
+const AI_GRADE_COOLDOWN_MS = 5 * 60000;
 async function gradeSubjective(q, user) {
   if (state.settings.grading === 'self') return { correct: null, aiNote: '' };
+  if (Date.now() < aiGradeDownUntil) return { correct: null, aiNote: '', error: true, circuit: true };
   try {
-    const out = await chat([
+    const TIMEOUT = Symbol('timeout');
+    const out = await withTimeoutP(chat([
       { role: 'system', content: '你是严格但公平的中文考试阅卷助手。判断学生答案与参考答案是否语义等价。仅当核心事实、结论和关键限定条件一致时判为正确；不确定时判错误。只返回 JSON：{"correct": true/false, "reason": "简要理由"}' },
       { role: 'user', content: `题型：${TYPES[q.type]}\n参考答案：${q.answer}\n学生答案：${user}` },
-    ], true);
+    ], true), AI_GRADE_TIMEOUT_MS, TIMEOUT);
+    if (out === TIMEOUT) {
+      aiGradeDownUntil = Date.now() + AI_GRADE_COOLDOWN_MS;
+      toast(`AI 判分超时（${AI_GRADE_TIMEOUT_MS / 1000} 秒），后续题目改为手动自评`, 'err');
+      return { correct: null, aiNote: '', error: true, timeout: true };
+    }
     const r = parseJSON(out);
     return { correct: !!r.correct, aiNote: r.reason || '' };
   } catch (e) {
-    toast('AI 判分失败，请手动自评：' + e.message, 'err');
+    aiGradeDownUntil = Date.now() + AI_GRADE_COOLDOWN_MS;
+    toast('AI 判分失败，后续题目改为手动自评：' + e.message, 'err');
     return { correct: null, aiNote: '', error: true };
   }
 }
@@ -5755,21 +5779,29 @@ async function submitRevAns(cid) {
     if (!user) { toast('请先输入答案', 'err'); return; }
   }
   const goBtn = $('#rv-go-' + cid);
-  goBtn.disabled = true; goBtn.textContent = '判分中…';
+  if (goBtn) { goBtn.disabled = true; goBtn.textContent = '判分中…'; }
   let correct, aiNote = '';
-  if (q.type === 'short_answer' || isTextType(q.type) || (q.type === 'fill_blank' && /[一-龥]{4,}/.test(q.answer))) {
-    const r = await gradeSubjective({ type: q.type, answer: q.answer }, user);
-    if (r.correct === null) {
-      correct = confirm(`AI 判分不可用，请自评。\n\n你的答案：${user}\n参考答案：${q.answer}\n\n点击「确定」= 答对，「取消」= 答错`);
-    } else { correct = r.correct; aiNote = r.aiNote; }
-  } else {
-    correct = gradeObjective({ type: q.type, answer: q.answer }, user);
+  try {
+    if (q.type === 'short_answer' || isTextType(q.type) || (q.type === 'fill_blank' && /[一-龥]{4,}/.test(q.answer))) {
+      const r = await gradeSubjective({ type: q.type, answer: q.answer }, user);
+      if (r.correct === null) {
+        correct = confirm(`AI 判分不可用，请自评。\n\n你的答案：${user}\n参考答案：${q.answer}\n\n点击「确定」= 答对，「取消」= 答错`);
+      } else { correct = r.correct; aiNote = r.aiNote; }
+    } else {
+      correct = gradeObjective({ type: q.type, answer: q.answer }, user);
+    }
+  } catch (e) {
+    console.error('卡片判分失败', e);
+    toast('判分失败：' + (e && e.message || e), 'err');
+    if (goBtn) { goBtn.disabled = false; goBtn.textContent = '提交答案'; }
+    return;
   }
-  goBtn.disabled = false; goBtn.textContent = '提交答案';
-  /* 计入练习记录（影响正确率统计与智能练习权重） */
-  await DB.add('practice', { question_id: q.id, is_correct: correct ? 1 : 0, answered_at: Date.now() });
+  if (goBtn) { goBtn.disabled = false; goBtn.textContent = '提交答案'; }
+  /* 计入练习记录（影响正确率统计与智能练习权重）；v1.42.1：写库失败不再中断结果展示 */
+  try { await dbWrite('practice', { question_id: q.id, is_correct: correct ? 1 : 0, answered_at: Date.now() }); }
+  catch (e) { console.error('practice 写入失败', e); toast('练习记录保存失败：' + (e && e.message || e), 'err'); }
   const res = $('#rv-res-' + cid);
-  res.innerHTML = `
+  if (res) res.innerHTML = `
     <div class="q-ans" style="margin-top:10px">
       <b style="color:${correct ? 'var(--green)' : 'var(--red)'}">${correct ? '✔ 回答正确' : '✘ 回答错误'}</b>
       ：${esc(q.answer)}
@@ -5783,7 +5815,7 @@ async function submitRevAns(cid) {
       : `<button class="primary sm" onclick="rateCardById(${cid},1)">📅 记为「忘记」，稍后重现</button>
          <button class="ghost sm" onclick="revRetry(${cid})">🔄 再试一次</button>`}
     </div>`;
-  await refreshData();
+  await dbRefresh();
 }
 function revRetry(cid) {
   const box = $('#rv-' + cid);
@@ -6564,7 +6596,7 @@ function renderExam() {
     <span class="pill gray">已答 ${answered} 题</span>
     <span style="flex:1"></span>
     ${exam.deadline ? `<span style="font-size:18px;font-weight:700" id="exClock">${fmtClock(left)}</span>` : '<span class="pill gray">不限时</span>'}
-    <button class="danger" onclick="confirmSubmitExam()">交卷</button>
+    <button class="danger" id="examSubmitBtn" onclick="confirmSubmitExam()">交卷</button>
   </div>
   <div class="progress" style="margin-bottom:14px"><i style="width:${answered / total * 100}%"></i></div>
   <div class="nav-grid noprint">
@@ -6660,6 +6692,8 @@ function bindExamKeys(it) {
   document.addEventListener('keydown', examKeyHandler);
 }
 function confirmSubmitExam() {
+  if (!exam) { toast('这场考试已结束，请重新开始一场', 'err'); go('exam'); return; }   // v1.42.1：旧版这里会抛 TypeError 导致点交卷毫无反应
+  if (exam.finished || exam.__grading) return;
   saveExamAnswer(exam.items[exam.idx]);
   const un = exam.items.filter(q => exam.answers[q.id] === undefined).length;
   const msg = un ? `还有 ${un} 道题未作答，确定交卷吗？` : '确定交卷吗？交卷后将立即批改。';
@@ -6667,70 +6701,101 @@ function confirmSubmitExam() {
   submitExam(false);
 }
 async function submitExam(auto) {
-  if (!exam || exam.finished) return;
+  if (!exam || exam.finished || exam.__grading) return;
   if (examTimer) { clearInterval(examTimer); examTimer = null; }
-  exam.finished = true;
+  exam.__grading = true;      // v1.42.1：用独立锁防重复提交，交卷失败还能重试
   const items = exam.items;
+  const btn = document.getElementById('examSubmitBtn');
+  const setBtn = (t, dis) => { if (btn) { btn.textContent = t; btn.disabled = dis; } };
   const results = [];
-  const subjective = items.filter(q => (q.type === 'short_answer') || (q.type === 'fill_blank' && /[\u4e00-\u9fa5]{4,}/.test(q.answer)));
-  const useAI = state.settings.grading === 'ai' && state.settings.apiKey;
-  let warnAI = subjective.length && !useAI;
-  if (warnAI) toast('未配置 AI 判分，主观题将由你手动自评', 'err');
-  for (let i = 0; i < items.length; i++) {
-    const q = items[i];
-    const user = exam.answers[q.id] ?? '';
-    const max = examCfgScore[q.type] ?? (isCustomType(q.type) ? 5 : 0);
-    let correct = false, note = '';
-    if (q.type === 'short_answer' || (q.type === 'fill_blank' && /[\u4e00-\u9fa5]{4,}/.test(q.answer))) {
-      if (useAI) {
-        try {
-          const r = await gradeSubjective(q, user);
-          correct = !!r.correct; note = r.aiNote || '';
-        } catch (err) { correct = false; note = 'AI 判分失败：' + err.message; }
+  try {
+    const subjective = items.filter(q => (q.type === 'short_answer') || (q.type === 'fill_blank' && /[\u4e00-\u9fa5]{4,}/.test(q.answer)));
+    const useAI = state.settings.grading === 'ai' && state.settings.apiKey;
+    let warnAI = subjective.length && !useAI;
+    if (warnAI) toast('未配置 AI 判分，主观题将由你手动自评', 'err');
+    setBtn('判分中…', true);
+    for (let i = 0; i < items.length; i++) {
+      if (btn) btn.textContent = `判分中 ${i + 1}/${items.length}`;   // 进度可见，避免误以为卡死
+      const q = items[i];
+      const user = exam.answers[q.id] ?? '';
+      const max = examCfgScore[q.type] ?? (isCustomType(q.type) ? 5 : 0);
+      let correct = false, note = '';
+      if (q.type === 'short_answer' || (q.type === 'fill_blank' && /[\u4e00-\u9fa5]{4,}/.test(q.answer))) {
+        if (useAI) {
+          try {
+            const r = await gradeSubjective(q, user);
+            correct = !!r.correct; note = r.aiNote || '';
+          } catch (err) { correct = false; note = 'AI 判分失败：' + err.message; }
+        } else {
+          correct = confirm(`【第 ${i + 1} 题 · 简答题自评】\n题干：${q.content.slice(0, 60)}\n参考答案：${q.answer}\n你的答案：${user || '（未作答）'}\n\n点击「确定」= 得分，点击「取消」= 不得分`);
+          note = '考生自评';
+        }
       } else {
-        correct = confirm(`【第 ${i + 1} 题 · 简答题自评】\n题干：${q.content.slice(0, 60)}\n参考答案：${q.answer}\n你的答案：${user || '（未作答）'}\n\n点击「确定」= 得分，点击「取消」= 不得分`);
-        note = '考生自评';
+        correct = !!user && gradeObjective(q, user);
       }
-    } else {
-      correct = !!user && gradeObjective(q, user);
-    }
-    if (!user) { correct = false; note = note || '未作答'; }
-    results.push({
-      qid: q.id, type: q.type, difficulty: q.difficulty, content: q.content,
-      options: q.options, answer: q.answer, explanation: q.explanation,
-      knowledge_point: q.knowledge_point, user, correct, note,
-      score: correct ? max : 0, max,
-    });
-  }
-  const obtained = results.reduce((s, r) => s + r.score, 0);
-  const total = results.reduce((s, r) => s + r.max, 0);
-  const rec = {
-    name: exam.name, started_at: exam.startedAt, submitted_at: Date.now(),
-    duration_sec: Math.round((Date.now() - exam.startedAt) / 1000),
-    config: {
-      ...(exam.cfg || {}),
-      types: [...(((exam.cfg || {}).types) || [])],
-      diffs: [...(((exam.cfg || {}).diffs) || [])],
-      score: { ...examCfgScore },
-    },
-    results, obtained, total, auto_submit: auto ? 1 : 0,
-  };
-  exam.record = rec;
-  // 记录练习与错题
-  for (const r of results) {
-    await DB.add('practice', { question_id: r.qid, is_correct: r.correct ? 1 : 0, answered_at: Date.now() });
-    if (!r.correct && !state.mistakes.find(m => m.question_id === r.qid)) {
-      await DB.add('mistakes', {
-        question_id: r.qid, user_answer: r.user, correct_answer: r.answer,
-        mistake_reason: r.note || `来自考试《${exam.name}》`, created_at: Date.now(),
-        question_content: r.content, type: r.type, difficulty: r.difficulty,
+      if (!user) { correct = false; note = note || '未作答'; }
+      results.push({
+        qid: q.id, type: q.type, difficulty: q.difficulty, content: q.content,
+        options: q.options, answer: q.answer, explanation: q.explanation,
+        knowledge_point: q.knowledge_point, user, correct, note,
+        score: correct ? max : 0, max,
       });
     }
+    const obtained = results.reduce((s, r) => s + r.score, 0);
+    const total = results.reduce((s, r) => s + r.max, 0);
+    const rec = {
+      name: exam.name, started_at: exam.startedAt, submitted_at: Date.now(),
+      duration_sec: Math.round((Date.now() - exam.startedAt) / 1000),
+      config: {
+        ...(exam.cfg || {}),
+        types: [...(((exam.cfg || {}).types) || [])],
+        diffs: [...(((exam.cfg || {}).diffs) || [])],
+        score: { ...examCfgScore },
+      },
+      results, obtained, total, auto_submit: auto ? 1 : 0,
+    };
+    exam.record = rec;
+    setBtn('保存中…', true);
+    // 记录练习与错题：单条失败/超时不影响整场判分（v1.42.1）
+    for (const r of results) {
+      try {
+        await dbWrite('practice', { question_id: r.qid, is_correct: r.correct ? 1 : 0, answered_at: Date.now() });
+      } catch (e) { console.error('practice 写入失败', e); }
+      if (!r.correct && !state.mistakes.find(m => m.question_id === r.qid)) {
+        try {
+          await dbWrite('mistakes', {
+            question_id: r.qid, user_answer: r.user, correct_answer: r.answer,
+            mistake_reason: r.note || `来自考试《${exam.name}》`, created_at: Date.now(),
+            question_content: r.content, type: r.type, difficulty: r.difficulty,
+          });
+        } catch (e) { console.error('mistakes 写入失败', e); }
+      }
+    }
+    try { await autoEnqueueIds(results.filter(r => !r.correct).map(r => r.qid)); }   // 考试错题自动入复习队列
+    catch (e) { console.error('复习卡入队失败', e); }
+    setBtn('保存成绩…', true);
+    const newId = await dbWrite('exams', rec, 15000);
+    exam.finished = true;
+    await dbRefresh();
+    if (newId === DB_TIMEOUT) {
+      // 成绩没落盘也要给用户看到结果（旧版这里若无新 id 就整场白考）
+      toast('成绩保存较慢，已先显示本次结果，稍后可在考试记录里查看', 'err');
+      renderExamReport(null, rec);
+    } else {
+      renderExamReport(newId);
+    }
+  } catch (e) {
+    console.error('交卷失败', e);
+    // 清掉半成品状态，让用户能再次点交卷重试（旧版会把 exam.finished 提前置 true，之后点交卷永远静默返回）
+    exam.results = exam.results || [];
+    if (typeof exam.answers === 'object') {
+      // 保留答案，方便重试
+    }
+    toast('交卷失败：' + (e && e.message || e) + '。可再次点击「交卷」重试', 'err');
+    setBtn('重新交卷', false);
+  } finally {
+    if (exam) exam.__grading = false;
   }
-  await autoEnqueueIds(results.filter(r => !r.correct).map(r => r.qid));  // 考试错题自动入复习队列
-  const newId = await DB.add('exams', rec);
-  await refreshData();
-  renderExamReport(newId);
 }
 /* ---------- 成绩报告 ---------- */
 async function viewExamReport(id) {
@@ -7138,21 +7203,29 @@ async function submitMistAns(mid) {
     if (!user) { toast('请先输入答案', 'err'); return; }
   }
   const goBtn = $('#ma-go-' + mid);
-  goBtn.disabled = true; goBtn.textContent = '判分中…';
+  if (goBtn) { goBtn.disabled = true; goBtn.textContent = '判分中…'; }
   let correct, aiNote = '';
-  if (type === 'short_answer' || isTextType(type) || (type === 'fill_blank' && /[一-龥]{4,}/.test(answer))) {
-    const r = await gradeSubjective({ type, answer }, user);
-    if (r.correct === null) {
-      correct = confirm(`AI 判分不可用，请自评。\n\n你的答案：${user}\n参考答案：${answer}\n\n点击「确定」= 答对，「取消」= 答错`);
-    } else { correct = r.correct; aiNote = r.aiNote; }
-  } else {
-    correct = gradeObjective({ type, answer }, user);
+  try {
+    if (type === 'short_answer' || isTextType(type) || (type === 'fill_blank' && /[一-龥]{4,}/.test(answer))) {
+      const r = await gradeSubjective({ type, answer }, user);
+      if (r.correct === null) {
+        correct = confirm(`AI 判分不可用，请自评。\n\n你的答案：${user}\n参考答案：${answer}\n\n点击「确定」= 答对，「取消」= 答错`);
+      } else { correct = r.correct; aiNote = r.aiNote; }
+    } else {
+      correct = gradeObjective({ type, answer }, user);
+    }
+  } catch (e) {
+    console.error('错题判分失败', e);
+    toast('判分失败：' + (e && e.message || e), 'err');
+    if (goBtn) { goBtn.disabled = false; goBtn.textContent = '提交答案'; }
+    return;
   }
-  goBtn.disabled = false; goBtn.textContent = '提交答案';
-  /* 计入练习记录（影响正确率统计与智能练习权重） */
-  await DB.add('practice', { question_id: m.question_id, is_correct: correct ? 1 : 0, answered_at: Date.now() });
+  if (goBtn) { goBtn.disabled = false; goBtn.textContent = '提交答案'; }
+  /* 计入练习记录（影响正确率统计与智能练习权重）；v1.42.1：写库失败不再中断结果展示 */
+  try { await dbWrite('practice', { question_id: m.question_id, is_correct: correct ? 1 : 0, answered_at: Date.now() }); }
+  catch (e) { console.error('practice 写入失败', e); toast('练习记录保存失败：' + (e && e.message || e), 'err'); }
   const res = $('#ma-res-' + mid);
-  res.innerHTML = `
+  if (res) res.innerHTML = `
     <div class="q-ans" style="margin-top:10px">
       <b style="color:${correct ? 'var(--green)' : 'var(--red)'}">${correct ? '✔ 回答正确' : '✘ 回答错误'}</b>
       ：${esc(answer)}
@@ -7165,13 +7238,13 @@ async function submitMistAns(mid) {
       : `<button class="ghost sm" onclick="mistRetry(${mid})">🔄 再试一次</button>`}
     </div>`;
   if (correct && state.settings.autoRemove) {
-    await DB.del('mistakes', mid);
-    await refreshData();
+    try { await DB.del('mistakes', mid); } catch (e) { console.error('移出错题本失败', e); }
+    await dbRefresh();
     toast('🎉 已掌握，自动移出错题本', 'ok');
     viewMist();
     return;
   }
-  await refreshData();
+  await dbRefresh();
 }
 function mistRetry(mid) {
   const box = $('#ma-' + mid);
