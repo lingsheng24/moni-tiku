@@ -5,7 +5,7 @@
  * - AI 请求代理（主进程发出，免受浏览器跨域限制）
  * - 文件保存对话框（导出 Word / 备份 JSON）
  */
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -127,8 +127,10 @@ try { mammoth = require('mammoth'); } catch (e) { console.warn('mammoth 未安�
 async function getPdfjs() {
   if (pdfjs) return pdfjs;
   try {
-    const m = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const worker = require('path').join(require('path').dirname(require.resolve('pdfjs-dist/package.json')), 'legacy', 'build', 'pdf.worker.mjs');
+    /* v1.40.0：legacy → 标准 build（Electron 33 = Node 20，无需旧环境兼容层），
+     * 配合 package.json files 排除 legacy/**，安装包减约 10MB。已用 Node 22 实测解析 PDF 正常。 */
+    const m = await import('pdfjs-dist/build/pdf.mjs');
+    const worker = require('path').join(require('path').dirname(require.resolve('pdfjs-dist/package.json')), 'build', 'pdf.worker.mjs');
     m.GlobalWorkerOptions.workerSrc = require('url').pathToFileURL(worker).href;
     pdfjs = m;
   } catch (e) { console.warn('pdfjs 加载失败:', e.message); pdfjs = null; }
@@ -304,7 +306,16 @@ function cur() { return loadCur(); }
 const BACKUP_INTERVAL_MS = 60 * 60 * 1000;
 let lastBackupAt = 0;
 function saveMeta() {
-  try { atomicWriteJson(dataFile(), cache || loadMeta()); return true; }
+  try {
+    const f = dataFile();
+    /* v1.40.0：meta 也进滚动备份（与题库共用 1 小时节流），损坏时 readJsonWithRecovery 才有真备份可恢复 */
+    if (fs.existsSync(f) && Date.now() - lastBackupAt > BACKUP_INTERVAL_MS) {
+      try { rotateBackup(f, 5); lastBackupAt = Date.now(); }
+      catch (e) { console.error('[数据] 元数据备份失败（不影响保存）', e); }
+    }
+    atomicWriteJson(f, cache || loadMeta());
+    return true;
+  }
   catch (e) { console.error('[数据] 元数据保存失败', e); return false; }
 }
 function saveBank() {
@@ -321,6 +332,41 @@ function saveBank() {
 }
 const STORES = ['docs', 'questions', 'mistakes', 'practice', 'exams', 'review'];
 const STORE_KEYS = STORES;   // 别名：数据层规范化用
+
+/* ---------------- 每日全量快照（v1.40.0） ----------------
+ * 每天首次启动把 data.json + banks/*.json 完整复制到 backups/daily/YYYY-MM-DD/，
+ * 保留最近 7 天（目录名即日期，超出自动删最旧）。
+ * 与 rotateBackup 的差别：滚动备份只留最近几小时，每日快照保证「至少能回到昨天」。 */
+const DAILY_SNAPSHOT_KEEP = 7;
+function dailySnapshot() {
+  try {
+    const dataPath = path.dirname(dataFile());
+    const dailyRoot = path.join(dataPath, 'backups', 'daily');
+    const today = new Date().toISOString().slice(0, 10);
+    const dest = path.join(dailyRoot, today);
+    if (fs.existsSync(dest)) return;   // 今天已经快照过
+    fs.mkdirSync(dest, { recursive: true });
+    let n = 0;
+    const files = [dataFile()];
+    try {
+      for (const f of fs.readdirSync(banksDir())) {
+        if (f.endsWith('.json')) files.push(path.join(banksDir(), f));
+      }
+    } catch (_) { /* banks 目录不存在（首次运行）就只快照 meta */ }
+    for (const f of files) {
+      if (fs.existsSync(f)) { fs.copyFileSync(f, path.join(dest, path.basename(f))); n++; }
+    }
+    if (n === 0) { fs.rmSync(dest, { recursive: true, force: true }); return; }   // 首次运行无数据，不留空快照
+    // 清理超过保留天数的旧快照
+    const days = fs.readdirSync(dailyRoot).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse();
+    for (const d of days.slice(DAILY_SNAPSHOT_KEEP)) {
+      try { fs.rmSync(path.join(dailyRoot, d), { recursive: true, force: true }); } catch (_) { }
+    }
+    console.log(`[数据] 每日快照完成：${today}（${n} 个文件，保留最近 ${DAILY_SNAPSHOT_KEEP} 天）`);
+  } catch (e) {
+    console.error('[数据] 每日快照失败（不影响使用）:', e && e.message);
+  }
+}
 function regData() {
   /* v1.31.0 起 data:xx 系列全部作用于「当前题库」（cur()），多题库间数据完全隔离 */
   ipcMain.handle('data:all', (e, store) => { if (!STORES.includes(store)) return []; return cur()[store]; });
@@ -341,8 +387,42 @@ function regData() {
     const d = cur(); d[store] = d[store].filter(x => x.id !== id); saveBank(); return true;
   });
   ipcMain.handle('data:clear', (e, store) => { const d = cur(); d[store] = []; saveBank(); return true; });
-  ipcMain.handle('kv:get', (e, k) => loadMeta().kv[k] ?? null);
-  ipcMain.handle('kv:set', (e, k, v) => { loadMeta().kv[k] = v; saveMeta(); return true; });
+  /* ---- settings 透明加解密（v1.40.0）----
+   * apiKey 原来明文躺在 meta.json 里，现在用 safeStorage（Windows DPAPI，绑定当前用户）加密。
+   * 渲染进程无感知：kv:get('settings') 返回时已解密；kv:set('settings', …) 落盘前已加密。
+   * safeStorage 不可用（极少数环境）时回落明文，行为与旧版一致。 */
+  const sealSettings = (s) => {
+    try {
+      const out = { ...s };
+      if (typeof out.apiKey === 'string' && out.apiKey && safeStorage.isEncryptionAvailable()) {
+        out.apiKeyEnc = safeStorage.encryptString(out.apiKey).toString('base64');
+      }
+      delete out.apiKey;   // 无论是否加密成功，落盘都不留明文
+      return out;
+    } catch (e) { console.error('[设置] apiKey 加密失败，本次按明文兜底:', e && e.message); return { ...s, apiKey: (s && s.apiKey) || '' }; }
+  };
+  const unsealSettings = (s) => {
+    const out = { ...s };
+    delete out.apiKey;                          // 历史明文不外泄
+    if (out.apiKeyEnc) {
+      try {
+        out.apiKey = safeStorage.decryptString(Buffer.from(out.apiKeyEnc, 'base64'));
+      } catch (e) {
+        // 换机器 / 重装系统后 DPAPI 解不开：清掉密文让用户重填，绝不把乱码当 Key 用
+        console.error('[设置] apiKey 解密失败（换机或系统变更？），已清空待重填:', e && e.message);
+        delete out.apiKeyEnc; delete out.apiKey;
+      }
+    }
+    return out;
+  };
+  ipcMain.handle('kv:get', (e, k) => {
+    const v = loadMeta().kv[k] ?? null;
+    return (k === 'settings' && v && typeof v === 'object') ? unsealSettings(v) : v;
+  });
+  ipcMain.handle('kv:set', (e, k, v) => {
+    loadMeta().kv[k] = (k === 'settings' && v && typeof v === 'object') ? sealSettings(v) : v;
+    saveMeta(); return true;
+  });
   /* 题库私有 kv（v1.31.0）：目前存 subjects——科目随题库隔离 */
   ipcMain.handle('bankkv:get', (e, k) => cur().kv[k] ?? null);
   ipcMain.handle('bankkv:set', (e, k, v) => { cur().kv[k] = v; saveBank(); return true; });
@@ -410,6 +490,15 @@ function regData() {
     return { ok: true, removedQuestions: n, curBank: d.curBank, list: bankList() };
   });
   ipcMain.handle('app:openDataDir', () => { shell.showItemInFolder(dataFile()); return true; });
+  /* v1.40.0：打开每日快照目录（存在才打开，否则打开数据目录） */
+  ipcMain.handle('app:openBackupDir', () => {
+    const daily = path.join(path.dirname(dataFile()), 'backups', 'daily');
+    try {
+      if (fs.existsSync(daily)) { shell.openPath(daily); return true; }
+    } catch (_) { }
+    shell.showItemInFolder(dataFile());
+    return true;
+  });
 
   /* ---- 数据文件路径管理 ---- */
   ipcMain.handle('data:getPath', () => {
@@ -1540,6 +1629,7 @@ function regWindow() {
 function bootstrap() {
   blog('bootstrap start · packaged=' + app.isPackaged + ' · ver=' + app.getVersion() + ' · argv=' + JSON.stringify(process.argv.slice(1)));
   try { migrateLegacyData(); } catch (e) { blog('migrateLegacyData 失败:', e && e.message); }
+  try { dailySnapshot(); } catch (e) { blog('dailySnapshot 失败:', e && e.message); }   // v1.40.0：每日全量快照
   regData(); regFile(); regAI(); regUpdate(); regWindow(); registerWebSearch();
   setupUpdater();
   setupChineseMenu();

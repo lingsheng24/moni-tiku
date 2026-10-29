@@ -624,7 +624,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.39.0';
+const APP_VER = '1.40.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -5266,7 +5266,7 @@ function sm2(card, grade) {
     else ivl = Math.max(1, Math.round((card.interval || 1) * ease * (grade === 2 ? 0.6 : grade === 4 ? 1.3 : 1)));
     ivl = Math.min(ivl, 365 * 3);
   }
-  return { ease, interval: ivl, reps, lapses, due: now + ivl * DAY_MS, state: cardState({ reps, interval: ivl }), hist: [...(card.hist || []), { at: now, g: grade, i: ivl }].slice(-60) };
+  return { ease, interval: ivl, reps, lapses, due: now + ivl * DAY_MS, state: cardState({ reps, interval: ivl, lapses }), hist: [...(card.hist || []), { at: now, g: grade, i: ivl }].slice(-60) };
 }
 /** 今日调度统计 */
 function revTodayStat() {
@@ -7450,7 +7450,7 @@ async function viewSet() {
       </label>
     </div>
     <label class="f"><span>接口地址 Base URL</span><input id="sBase" value="${esc(s.apiBase)}" placeholder="https://api.deepseek.com/v1" autocomplete="off" spellcheck="false"></label>
-    <label class="f"><span>API Key（仅保存在本机浏览器）</span><input id="sKey" type="password" value="${esc(s.apiKey)}" placeholder="sk-..." autocomplete="off"></label>
+    <label class="f"><span>API Key（仅保存在本机${IS_DESKTOP ? '，加密存储' : ''}）</span><input id="sKey" type="password" value="${esc(s.apiKey)}" placeholder="sk-..." autocomplete="off"></label>
     <div class="row">
       <button class="primary" id="sSave">保存设置</button>
       <button class="ghost" id="sTest">测试连接</button>
@@ -7571,6 +7571,7 @@ async function viewSet() {
         <div class="row" style="margin-top:8px">
           <button class="ghost" onclick="changeDataPath()">📂 修改数据文件路径…</button>
           <button class="ghost" onclick="resetDataPath()">↩ 恢复默认位置</button>
+          ${IS_DESKTOP ? '<button class="ghost" onclick="window.electronAPI && window.electronAPI.openBackupDir()">🗂 打开自动备份目录</button>' : ''}
           <span style="color:var(--muted);font-size:12px">可迁移到同步盘 / 移动硬盘，实现多机同步</span>
         </div>
       </div>
@@ -7681,7 +7682,8 @@ async function viewSet() {
     } catch (e) { toast('连接失败：' + e.message, 'err'); }
   };
   $('#sBackup').onclick = () => {
-    const data = { version: 5, exported_at: new Date().toISOString(), docs: state.docs, questions: state.questions, mistakes: state.mistakes, practice: state.practice, exams: state.exams, reviews: state.reviews, custom_types: customTypes, subjects, settings: state.settings, kpNotes: state.kpNotes || {}, kbNotes: kbFreeNotes() };
+    /* v1.40.0：导出的备份文件不含 API Key（防止备份文件外泄密钥），导入后需重新填写 */
+    const data = { version: 5, exported_at: new Date().toISOString(), docs: state.docs, questions: state.questions, mistakes: state.mistakes, practice: state.practice, exams: state.exams, reviews: state.reviews, custom_types: customTypes, subjects, settings: { ...state.settings, apiKey: '' }, kpNotes: state.kpNotes || {}, kbNotes: kbFreeNotes() };
     const json = JSON.stringify(data, null, 2);
     const fname = '题库备份_' + new Date().toISOString().slice(0, 10) + '.json';
     if (IS_DESKTOP) { saveAs(fname, json, 'json', 'JSON 备份'); return; }
@@ -7696,7 +7698,8 @@ async function viewSet() {
         await DB.clear(store);
         for (const item of (data[store] || [])) { const { id, ...rest } = item; await DB.add(store, rest); }
       }
-      if (data.settings) { state.settings = { ...state.settings, ...data.settings }; await DB.kvSet('settings', state.settings); applyTheme(); }
+      /* v1.40.0：备份文件已不含 apiKey，为空时不覆盖本机已填的 Key */
+      if (data.settings) { const s = { ...data.settings }; if (!s.apiKey) delete s.apiKey; state.settings = { ...state.settings, ...s }; await DB.kvSet('settings', state.settings); applyTheme(); }
       if (Array.isArray(data.custom_types)) { customTypes = data.custom_types; applyCustomTypes(); await DB.kvSet('custom_types', customTypes); }
       if (Array.isArray(data.subjects)) { subjects = data.subjects; await saveSubjects(); }
       /* v1.35.0：笔记一并恢复（知识点笔记 + 知识库手记） */
@@ -7873,7 +7876,7 @@ const HELP_SECTIONS = [
         <li><b>下载完成 → 弹窗提示，手动安装</b>：点「🔧 立即安装」才启动安装向导，按向导提示完成即可。若暂时不想装，直接关掉弹窗，程序照常使用——<b>退出软件时也不会静默安装</b>。</li>
       </ol>
       <div class="help-tip warn"><b>注意：</b>便携版（portable）不支持在线更新，请到发布页下载新版后手动替换文件。安装过程会覆盖程序文件，题库数据存在数据目录里不受影响。</div>
-      <div class="help-tip"><b>数据安全：</b>桌面版数据文件默认在用户目录下的应用数据目录，可在「系统设置 → 数据文件位置」改到同步盘或移动硬盘，实现多机同步；程序每小时自动滚动备份，主文件损坏时启动会自动从备份恢复。</div>`,
+      <div class="help-tip"><b>数据安全：</b>桌面版数据文件默认在用户目录下的应用数据目录，可在「系统设置 → 数据文件位置」改到同步盘或移动硬盘，实现多机同步；程序每小时自动滚动备份，每天首次启动还会做一份<b>全天快照</b>（保留最近 7 天，见「系统设置 → 打开自动备份目录」），主文件损坏时启动会自动从备份恢复。</div>`,
   },
   {
     id: 'docs', ico: '📄', title: '文档管理',

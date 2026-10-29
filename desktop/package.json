@@ -1,6 +1,6 @@
 {
   "name": "moni-tiku",
-  "version": "1.39.0",
+  "version": "1.40.0",
   "private": true,
   "description": "模拟题库 桌面版",
   "main": "main.js",
@@ -88,7 +88,9 @@
       "!**/*.map",
       "!node_modules/pdfjs-dist/web/**",
       "!node_modules/pdfjs-dist/types/**",
-      "!node_modules/pdfjs-dist/build/**"
+      "!node_modules/pdfjs-dist/legacy/**",
+      "!node_modules/pdfjs-dist/image_decoders/**",
+      "!node_modules/pdfjs-dist/webpack.mjs"
     ],
     "afterPack": "./afterPack.js"
   }
