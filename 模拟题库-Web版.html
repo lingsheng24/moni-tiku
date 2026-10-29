@@ -122,6 +122,7 @@ h1{font-size:20px;margin-bottom:4px}
 .grid{display:grid;gap:14px}
 .grid.c4{grid-template-columns:repeat(4,1fr)}
 .grid.c5{grid-template-columns:repeat(5,1fr)}
+.grid.c6{grid-template-columns:repeat(6,1fr)}
 .grid.c2{grid-template-columns:repeat(2,1fr)}
 .stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
 .stat .num{font-size:26px;font-weight:700;margin-top:2px}
@@ -151,6 +152,9 @@ textarea{resize:vertical;min-height:90px}
 .pill.red{background:var(--red-soft);color:var(--red)}
 .pill.amber{background:var(--amber-soft);color:var(--amber)}
 .pill.gray{background:var(--panel2);color:var(--muted)}
+/* v1.44.0：题目笔记在知识库里的标识色（紫），深色主题单独压暗，避免刺眼 */
+.pill.violet{background:#f3edff;color:#7c3aed}
+html[data-theme=dark] .pill.violet{background:#2a1f45;color:#b49bff}
 .tag{cursor:pointer;border:1px solid var(--border);padding:6px 14px;border-radius:99px;font-size:13px;user-select:none;transition:.15s}
 .tag.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
 table{width:100%;border-collapse:collapse}
@@ -536,7 +540,7 @@ body.is-desktop .modal-mask{top:36px}
 .rev-chip i{width:9px;height:9px;border-radius:2px;display:inline-block}
 @media(max-width:900px){.rate-grid{grid-template-columns:repeat(2,1fr)}}
 a{color:var(--primary)}
-@media(max-width:900px){.main{padding:16px}.grid.c4{grid-template-columns:repeat(2,1fr)}.grid.c5{grid-template-columns:repeat(2,1fr)}
+@media(max-width:900px){.main{padding:16px}.grid.c4{grid-template-columns:repeat(2,1fr)}.grid.c5{grid-template-columns:repeat(2,1fr)}.grid.c6{grid-template-columns:repeat(2,1fr)}
   /* 窄屏：强制折叠，且宽度不可拖（避免拖出超窄/超宽的怪尺寸） */
   .sidebar{width:64px!important}.sidebar .logo b,.sidebar .logo small,.sidebar .nav-item span.txt,.sidebar .foot{display:none}
   .sidebar{padding-left:8px;padding-right:8px;align-items:center}
@@ -634,7 +638,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.43.0';
+const APP_VER = '1.44.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -4302,13 +4306,15 @@ async function saveKPNote(name) {
  *   ① 知识点笔记 —— 图谱详情卡里写的（kv.kpNotes，按知识点名索引）
  *   ② 错题笔记   —— 错题本里给某道错题写的（mistakes[].note）
  *   ③ 知识库手记 —— 本页新建（kv.kbNotes，随题库隔离，可选关联知识点）
+ *   ④ 题目笔记   —— v1.44.0：复习/练习/题库里给某道题写的（questions[].note，随题目走）
  * 联动：图谱节点有笔记时亮琥珀色小点 + 外圈，可「只看有笔记的知识点」；每条笔记可一键回图谱定位。
- * 笔记只做汇总，不复制：在知识库里改知识点笔记，图谱详情同步变；改错题笔记，错题本同步变。 */
+ * 笔记只做汇总，不复制：在知识库里改知识点笔记，图谱详情同步变；改错题笔记，错题本同步变；改题目笔记，原题同步变。 */
 const KB_KIND = {
-  kp:   { label: '知识点笔记', ico: '📝', cls: 'amber' },
-  mist: { label: '错题笔记',   ico: '📕', cls: 'red' },
-  free: { label: '知识库手记', ico: '🗒', cls: 'blue' },
-  fav:  { label: '查询收藏',   ico: '⭐', cls: 'green' },   // v1.38.1：联网查询收藏（随题库隔离，只读快照）
+  kp:    { label: '知识点笔记', ico: '📝', cls: 'amber' },
+  qn:    { label: '题目笔记',   ico: '✏️', cls: 'violet', q: true },   // v1.44.0：题目级笔记（questions[].note）
+  mist:  { label: '错题笔记',   ico: '📕', cls: 'red' },
+  free:  { label: '知识库手记', ico: '🗒', cls: 'blue' },
+  fav:   { label: '查询收藏',   ico: '⭐', cls: 'green' },   // v1.38.1：联网查询收藏（随题库隔离，只读快照）
 };
 let kbFilter = { kw: '', kind: '', kp: '' };
 let kbEditing = null;                 // 正在编辑的笔记 key（null = 新建）
@@ -4343,6 +4349,17 @@ function kbAllNotes() {
     out.push({
       key: 'free:' + n.id, kind: 'free', id: n.id, kp: n.kp || '',
       kps: n.kp ? [n.kp] : [], text: n.text, at: n.updatedAt || n.at || 0,
+    });
+  }
+  /* v1.44.0：题目笔记（复习 / 答题练习 / 题库里给某道题写的，存在 questions[].note） */
+  for (const q of (state.questions || [])) {
+    const t = typeof q.note === 'string' ? q.note.trim() : '';
+    if (!t) continue;
+    out.push({
+      key: 'qn:' + q.id, kind: 'qn', qid: q.id,
+      kp: splitKP(q.knowledge_point)[0] || '', kps: splitKP(q.knowledge_point),
+      text: t, at: q.note_at || 0,
+      content: q.content || '', qtype: q.type || '', qdiff: q.difficulty || '',
     });
   }
   /* v1.38.1：联网查询收藏并入知识库（只读快照，编辑请走「转笔记」） */
@@ -4391,6 +4408,7 @@ function kbStats(notes) {
   return {
     total: list.length,
     kp: list.filter(n => n.kind === 'kp').length,
+    qn: list.filter(n => n.kind === 'qn').length,
     mist: list.filter(n => n.kind === 'mist').length,
     free: list.filter(n => n.kind === 'free').length,
     fav: list.filter(n => n.kind === 'fav').length,
@@ -4455,15 +4473,43 @@ function kbNoteCard(n) {
     <div class="kb-note-hd"><span class="pill ${meta.cls}">${meta.ico} ${meta.label}</span>${pills || '<span class="pill gray">未关联知识点</span>'}<span style="flex:1"></span></div>
     <div class="kb-note-txt">${esc(n.text)}</div>
     ${n.kind === 'mist' ? `<div class="kb-note-q">📕 ${esc(n.content || '（原题已删除）')}</div>` : ''}
+    ${n.kind === 'qn' ? `<div class="kb-note-q">✏️ ${esc(TYPES[n.qtype] || n.qtype || '题目')} · ${esc(clipText(n.content, 130) || '（原题已删除）')}</div>` : ''}
     <div class="kb-note-ft">
       <span>${fmtDate(n.at)}</span><span style="flex:1"></span>
       ${n.kind === 'mist' ? '<button class="ghost" onclick="go(\'mist\')">去错题本</button>' : ''}
+      ${n.kind === 'qn' ? `<button class="ghost" data-qid="${n.qid}" onclick="kbShowQuestion(+this.dataset.qid)" title="看这道题的题干、答案与解析">📖 看原题</button>` : ''}
       ${kps[0] ? `<button class="ghost" onclick="goKPDetail('${esc(kps[0])}')">图谱定位</button>` : ''}
       <button class="ghost" data-q="${esc(kps[0] || (n.content || '').slice(0, 20))}" data-kp="${esc(kps[0] || '')}" onclick="wsOpen(this.dataset.q, this.dataset.kp)" title="联网查这个知识点，可把结果存成新笔记">🔍 查</button>
       <button class="ghost" onclick="kbEditNote('${esc(n.key)}')">✏️ 编辑</button>
       <button class="ghost kpn-del" onclick="kbDeleteNote('${esc(n.key)}')">删除</button>
     </div>
   </div>`;
+}
+/** 截断长文本（题目笔记卡片只露摘要，完整内容在「看原题」里） */
+function clipText(s, n) {
+  const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  return t.length > n ? t.slice(0, n) + '…' : t;
+}
+/** 知识库里「看原题」：只读弹窗展示题目全文与答案，避免跳走丢失当前筛选 */
+function kbShowQuestion(qid) {
+  const q = (state.questions || []).find(x => x.id === qid);
+  if (!q) { toast('这道题已被删除', 'err'); return; }
+  const opts = Array.isArray(q.options) && q.options.length
+    ? q.options.map(o => `<div style="padding:3px 0;font-size:16px">${esc(o)}</div>`).join('') : '';
+  modal(`<h3 style="margin-bottom:8px">📖 原题</h3>
+    <div class="row" style="gap:6px;margin-bottom:10px">
+      <span class="pill blue">${esc(TYPES[q.type] || q.type || '题目')}</span>
+      ${q.knowledge_point ? `<span class="pill gray">🧠 ${esc(q.knowledge_point)}</span>` : ''}
+      ${q.difficulty ? `<span class="pill gray">难度 ${esc(String(q.difficulty))}</span>` : ''}
+    </div>
+    <div style="font-size:17px;line-height:1.7">${esc(q.content || '')}</div>
+    ${opts ? `<div style="margin-top:10px">${opts}</div>` : ''}
+    <div class="q-ans" style="margin-top:12px"><b>答案：</b>${esc(q.answer || '')}${q.explanation ? `<br><b style="color:var(--muted)">解析：</b>${esc(q.explanation)}` : ''}</div>
+    ${qNote(q) ? `<div class="q-note-show" style="margin-top:12px">📝 <b>我的笔记</b>：${esc(qNote(q))}</div>` : ''}
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button class="ghost" onclick="closeModal()">关闭</button>
+      <button class="primary" onclick="closeModal();reviewQuestion(${qid})">🔁 复习这道题</button>
+    </div>`);
 }
 /** 只重渲染笔记列表（搜索时保住输入框焦点与光标） */
 function kbRenderList() {
@@ -4475,7 +4521,7 @@ function kbRenderList() {
     ? `<div class="kb-grid">${list.map(kbNoteCard).join('')}</div>`
     : `<div class="card"><div class="empty">${all.length
         ? '没有符合筛选条件的笔记<br>换个关键词，或把类型切回「全部」'
-        : '还没有任何笔记或收藏<br>在图谱里选中知识点写一条、错题本记笔记、联网查询里点「⭐ 收藏」，都会自动收进知识库'}</div></div>`;
+        : '还没有任何笔记或收藏<br>复习或答题练习时在题目下方写「📝 我的笔记」、图谱里选中知识点写一条、错题本记笔记、联网查询里点「⭐ 收藏」，都会自动收进知识库'}</div></div>`;
   const cnt = document.getElementById('kbCount');
   if (cnt) cnt.textContent = `当前显示 ${list.length} / ${all.length} 条`;
 }
@@ -4490,13 +4536,14 @@ function viewKB() {
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh')).slice(0, 6);
   if (kbFilter.kp && !kpOptions.includes(kbFilter.kp)) kbFilter.kp = '';
   $('#view').innerHTML = `
-  <h1>知识库</h1><div class="sub">知识点笔记、错题笔记、手记、联网查询收藏都收在这里 · 每条笔记都能回图谱定位到对应知识点</div>
-  <div class="grid c5" style="margin-bottom:16px">
+  <h1>知识库</h1><div class="sub">题目笔记、知识点笔记、错题笔记、手记、联网查询收藏都收在这里 · 每条笔记都能回原题或回图谱定位</div>
+  <div class="grid c6" style="margin-bottom:16px">
     <div class="stat a"><div class="lbl">笔记总数</div><div class="num">${s.total}</div></div>
-    <div class="stat b"><div class="lbl">知识点笔记</div><div class="num">${s.kp}</div></div>
-    <div class="stat c"><div class="lbl">错题笔记</div><div class="num">${s.mist}</div></div>
-    <div class="stat d"><div class="lbl">知识库手记</div><div class="num">${s.free}</div></div>
-    <div class="stat a"><div class="lbl">查询收藏</div><div class="num">${s.fav}</div></div>
+    <div class="stat b"><div class="lbl">题目笔记</div><div class="num">${s.qn}</div></div>
+    <div class="stat c"><div class="lbl">知识点笔记</div><div class="num">${s.kp}</div></div>
+    <div class="stat d"><div class="lbl">错题笔记</div><div class="num">${s.mist}</div></div>
+    <div class="stat a"><div class="lbl">知识库手记</div><div class="num">${s.free}</div></div>
+    <div class="stat b"><div class="lbl">查询收藏</div><div class="num">${s.fav}</div></div>
   </div>
   <div class="card noprint">
     <div class="row" style="margin-bottom:10px">
@@ -4546,14 +4593,16 @@ async function kbOpenGraph() {
   go('kp');
   toast('已在图谱里只显示有笔记的知识点');
 }
-/** 新建 / 编辑笔记的弹窗；kind=kp 或 mist 时按原存储就地改（不复制数据） */
+/** 新建 / 编辑笔记的弹窗；kind=kp / mist / qn 时按原存储就地改（不复制数据） */
 function kbOpenEditor(opt) {
   const kps = [...new Set([...kbGraphNames(true), ...Object.keys(state.kpNotes || {})])]
     .sort((a, b) => a.localeCompare(b, 'zh'));
   const isNew = !!opt.isNew;
-  modal(`<h3>${isNew ? '📝 新建知识库笔记' : '✏️ 编辑笔记'}</h3>
-    <div class="f"><span class="f-lbl">关联知识点（可选，填了就能在图谱里定位）</span>
-      <input id="kbEKP" list="kbKPList" value="${esc(opt.kp || '')}" placeholder="例如：牛顿第二定律">
+  const isQN = opt.kind === 'qn';   // 题目笔记：知识点归属来自题目本身，这里只改文字
+  modal(`<h3>${isNew ? '📝 新建知识库笔记' : (isQN ? '✏️ 编辑题目笔记' : '✏️ 编辑笔记')}</h3>
+    ${isQN && opt.content ? `<div class="kb-note-q" style="margin-bottom:10px">✏️ ${esc(clipText(opt.content, 110))}</div>` : ''}
+    <div class="f"><span class="f-lbl">${isQN ? '所属知识点（来自题目本身，要改请去题库编辑题目）' : '关联知识点（可选，填了就能在图谱里定位）'}</span>
+      <input id="kbEKP" list="kbKPList" value="${esc(opt.kp || '')}" placeholder="例如：牛顿第二定律" ${isQN ? 'disabled' : ''}>
       <datalist id="kbKPList">${kps.map(k => `<option value="${esc(k)}"></option>`).join('')}</datalist>
     </div>
     <div class="f"><span class="f-lbl">笔记内容</span>
@@ -4563,7 +4612,7 @@ function kbOpenEditor(opt) {
       <button class="primary" onclick="kbSaveNote()">保存笔记</button>
       <button class="ghost" onclick="closeModal()">取消</button>
       <span style="flex:1"></span>
-      <span style="color:var(--muted);font-size:12px">${opt.kind === 'kp' ? '图谱里的知识点笔记，改这里会同步到图谱' : opt.kind === 'mist' ? '错题笔记，改这里会同步到错题本' : '存进知识库，可选关联一个知识点'}</span>
+      <span style="color:var(--muted);font-size:12px">${opt.kind === 'kp' ? '图谱里的知识点笔记，改这里会同步到图谱' : opt.kind === 'mist' ? '错题笔记，改这里会同步到错题本' : isQN ? '题目笔记，改这里会同步到原题（复习/练习里看到的就是它）' : '存进知识库，可选关联一个知识点'}</span>
     </div>`);
   setTimeout(() => { const ta = document.getElementById('kbEText'); if (ta) { try { ta.focus(); } catch (e) { } } }, 30);
 }
@@ -4576,7 +4625,7 @@ function kbEditNote(key) {
   if (!n) { toast('这条笔记已不存在，刷新看看', 'err'); return; }
   if (n.kind === 'fav') { toast('收藏是查询时的快照，不能直接改 —— 点「📝 转笔记」整理成笔记后就能编辑', 'ok'); return; }
   kbEditing = key;
-  kbOpenEditor({ kind: n.kind, kp: n.kp, text: n.text, isNew: false });
+  kbOpenEditor({ kind: n.kind, kp: n.kp, text: n.text, isNew: false, content: n.content || '', qid: n.qid });
 }
 async function kbSaveNote() {
   const text = (document.getElementById('kbEText')?.value || '').trim();
@@ -4597,6 +4646,9 @@ async function kbSaveNote() {
       await DB.put('mistakes', rec);
       const local = state.mistakes.find(x => x.id === editing.id);
       if (local) { local.note = text; local.note_at = rec.note_at; }
+    } else if (editing.kind === 'qn') {
+      /* v1.44.0：题目笔记直接写回 questions[].note —— 失败时留着弹窗，别让用户白打字 */
+      if (!await saveQNote(editing.qid, text)) return;
     } else {
       state.kbNotes = kbFreeNotes().map(x => x.id === editing.id
         ? { ...x, kp, text, updatedAt: Date.now() } : x);
@@ -4630,6 +4682,9 @@ async function kbDeleteNote(key) {
   } else if (n.kind === 'fav') {
     state.wsFavs = (state.wsFavs || []).filter(x => x.id !== n.id);
     wsFavSave();
+  } else if (n.kind === 'qn') {
+    /* v1.44.0：删题目笔记 = 清空原题的 note（题目本身不动） */
+    if (!await saveQNote(n.qid, '')) return;
   } else {
     state.kbNotes = kbFreeNotes().filter(x => x.id !== n.id);
     await DB.bkvSet('kbNotes', state.kbNotes);
@@ -8421,10 +8476,11 @@ const HELP_SECTIONS = [
   },
   {
     id: 'kb', ico: '📚', title: '知识库',
-    shots: [['06', '知识库 · 四类内容统一检索，每条笔记可一键跳回对应页面']],
-    html: `<p>把平时写的笔记<b>自动汇总到一处</b>，并且每条都能回「知识点图谱」定位。知识库不复制数据，只是把各处笔记集中展示、统一检索（联网查询的收藏也会自动收进来）：</p>
+    shots: [['06', '知识库 · 五类内容统一检索，每条笔记可一键跳回对应页面']],
+    html: `<p>把平时写的笔记<b>自动汇总到一处</b>，并且每条都能回「知识点图谱」或原题定位。知识库不复制数据，只是把各处笔记集中展示、统一检索（联网查询的收藏也会自动收进来）：</p>
       <table class="help-table">
         <tr><th style="width:130px">来源</th><th>在哪写</th><th>存在哪</th></tr>
+        <tr><td>✏️ 题目笔记</td><td>复习、答题练习、卡片管理里题目下方的「📝 我的笔记」；或题库管理里的「📝 笔记」按钮</td><td>跟着题目本身走（questions.note），随题库备份与导出</td></tr>
         <tr><td>📝 知识点笔记</td><td>图谱里单击知识点 → 详情卡「添加笔记」</td><td>按知识点名保存，一个知识点一条</td></tr>
         <tr><td>📕 错题笔记</td><td>错题本里点某道错题上的「📝 笔记」</td><td>跟着那条错题记录走</td></tr>
         <tr><td>🗒 知识库手记</td><td>本页「＋ 新建笔记」</td><td>随题库保存，可选关联一个知识点</td></tr>
@@ -8432,20 +8488,21 @@ const HELP_SECTIONS = [
       </table>
       <div class="help-h4">怎么用</div>
       <ul>
-        <li><b>搜索</b>：输入关键词实时过滤，匹配笔记内容、知识点名和错题题干。</li>
-        <li><b>筛选</b>：上方胶囊切「全部 / 知识点笔记 / 错题笔记 / 手记 / ⭐ 查询收藏」，还能按知识点下拉筛选；可叠加。</li>
-        <li><b>编辑</b>：卡片右下角「✏️ 编辑」会<b>就地改原处</b>——改知识点笔记，图谱详情同步变；改错题笔记，错题本同步变；收藏卡没有编辑按钮，点「📝 转笔记」整理成手记后再改。</li>
-        <li><b>删除</b>：只删这条笔记，不会删知识点、题目或错题记录；错题笔记删的是笔记内容。</li>
+        <li><b>搜索</b>：输入关键词实时过滤，匹配笔记内容、知识点名和题目/错题题干。</li>
+        <li><b>筛选</b>：上方胶囊切「全部 / 题目笔记 / 知识点笔记 / 错题笔记 / 手记 / ⭐ 查询收藏」，还能按知识点下拉筛选；可叠加。</li>
+        <li><b>看原题</b>：题目笔记卡片上的「📖 原题」弹出完整题干、选项、答案与解析，弹窗里还能直接「🔁 复习这道题」。</li>
+        <li><b>编辑</b>：卡片右下角「✏️ 编辑」会<b>就地改原处</b>——改题目笔记，复习/练习里看到的就是新内容；改知识点笔记，图谱详情同步变；改错题笔记，错题本同步变；收藏卡没有编辑按钮，点「📝 转笔记」整理成手记后再改。</li>
+        <li><b>删除</b>：只删这条笔记，不会删知识点或题目；题目笔记删的是笔记内容，题目本身不动。</li>
         <li><b>新建</b>：填「关联知识点」（可从已有知识点里选）就能在图谱里定位；不填则作为纯手记留在知识库。</li>
       </ul>
       <div class="help-h4">与知识点图谱联动</div>
       <ul>
-        <li>写过笔记的知识点，在图谱里会亮<b>琥珀色外环 + 右上角小圆点</b>，悬停提示里也会写明「📝 N 条笔记」。</li>
+        <li>写过笔记的知识点，在图谱里会亮<b>琥珀色外环 + 右上角小圆点</b>，悬停提示里也会写明「📝 N 条笔记」（题目笔记、知识点笔记、错题笔记、手记都算）。</li>
         <li>图谱工具栏右上角有 <b>「📝 有笔记（N）」</b> 开关：勾上只显示写过笔记的知识点，适合考前快速过一遍自己总结的内容；再取消恢复全部。</li>
         <li>知识库顶部「🧠 笔记与图谱联动」卡片显示<b>笔记覆盖了多少个知识点</b>（进度条），并列出笔记最多的知识点，点一下直接跳图谱。</li>
         <li>每张笔记卡上的知识点标签、底部「图谱定位」按钮，都能跳到图谱并选中对应节点。知识点在题库里还没有题目时，会提示「图谱里暂时没有这个节点」。</li>
       </ul>
-      <div class="help-tip"><b>数据安全：</b>知识库手记随题库保存（不同题库互不相通）；「系统设置 → 导出全部数据」已包含知识点笔记与知识库手记，换机迁移不会丢。</div>`,
+      <div class="help-tip"><b>数据安全：</b>题目笔记跟着题目走、手记与知识点笔记随题库保存（不同题库互不相通）；「系统设置 → 导出全部数据」全部包含，换机迁移不会丢。</div>`,
   },
   {
     id: 'websearch', ico: '🔍', title: '联网查询',
