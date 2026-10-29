@@ -30,4 +30,24 @@ exports.default = async function afterPack(context) {
     'product-version': pkg.version,
   });
   console.log('[afterPack] 图标嵌入完成');
+
+  /* v1.42.0：帮助配图外置——app.html 里 1.7MB base64 内嵌换成存根，
+   * 数据放 resources/help-imgs.json，由 preload（help:imgs）注入 window.__HELP_IMGS__。 */
+  const htmlPath = path.join(context.appOutDir, 'resources', 'app.html');
+  const jsonSrc = path.join(__dirname, 'help-imgs.json');
+  if (!fs.existsSync(htmlPath)) { console.warn('[afterPack] 未找到 app.html，跳过配图外置'); return; }
+  if (!fs.existsSync(jsonSrc)) { console.warn('[afterPack] 缺少 help-imgs.json，保留内嵌配图'); return; }
+  const START = '/* ==== BUILD:helpimgs:START ==== */';
+  const END = '/* ==== BUILD:helpimgs:END ==== */';
+  let appHtml = fs.readFileSync(htmlPath, 'utf8');
+  const si = appHtml.indexOf(START), ei = appHtml.indexOf(END);
+  if (si < 0 || ei < 0) { console.warn('[afterPack] app.html 无 helpimgs 标记区，保留内嵌配图'); return; }
+  const stub = START + '\n'
+    + "const HELP_IMGS_EMBED = {};\n"
+    + "const HELP_IMGS = (typeof window !== 'undefined' && window.__HELP_IMGS__) || HELP_IMGS_EMBED;\n"
+    + END;
+  appHtml = appHtml.slice(0, si) + stub + appHtml.slice(ei + END.length);
+  fs.writeFileSync(htmlPath, appHtml);
+  fs.copyFileSync(jsonSrc, path.join(context.appOutDir, 'resources', 'help-imgs.json'));
+  console.log(`[afterPack] 帮助配图外置完成：app.html ${(fs.statSync(htmlPath).size / 1048576).toFixed(2)}MB + help-imgs.json`);
 };

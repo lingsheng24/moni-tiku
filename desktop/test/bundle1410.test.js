@@ -105,8 +105,8 @@ describe('搜索引擎健康度：createEngineHealth', () => {
 });
 
 describe('渐进拆分：build.js 一致性', () => {
-  it('REGIONS 已登记 db 与 websearch 两个域', () => {
-    expect(REGIONS.map(r => r.name).sort()).toEqual(['db', 'websearch']);
+  it('REGIONS 已登记全部拆分域（db / websearch / helpimgs）', () => {
+    expect(REGIONS.map(r => r.name).sort()).toEqual(['db', 'helpimgs', 'websearch']);
   });
   it('构建产物与仓库中的 HTML 一致（防止改了 src/ 忘了 node build.js）', () => {
     const html = fs.readFileSync(path.join(__dirname, '..', '..', '模拟题库-Web版.html'), 'utf8');

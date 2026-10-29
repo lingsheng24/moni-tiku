@@ -27,6 +27,8 @@ cert/
 *.tmp
 Thumbs.db
 desktop/dev-app-update.yml
+# 拍图 / 实测脚本的临时浏览器 profile（体积大且是机器专属，万勿入库）
+教程/.edge-profile*/
 
 # ---- 编辑器 ----
 .vscode/

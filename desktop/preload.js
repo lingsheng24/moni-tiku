@@ -2,6 +2,13 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const invoke = (ch, ...args) => ipcRenderer.invoke(ch, ...args);
 
+/* v1.42.0：帮助手册配图外置——数据在 resources/help-imgs.json（打包由 afterPack 放置），
+ * 主进程同步读出后经 contextBridge 注入；网页版则用 HTML 内嵌的 HELP_IMGS_EMBED。 */
+try {
+  const imgs = ipcRenderer.sendSync('help:imgs');
+  if (imgs && Object.keys(imgs).length) contextBridge.exposeInMainWorld('__HELP_IMGS__', imgs);
+} catch (e) { console.warn('[preload] 帮助配图注入失败', e); }
+
 contextBridge.exposeInMainWorld('electronAPI', {
   /** 是否桌面版 */
   isDesktop: true,

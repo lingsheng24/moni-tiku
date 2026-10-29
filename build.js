@@ -20,6 +20,7 @@ const HTML_FILE = path.join(ROOT, '模拟题库-Web版.html');
 const REGIONS = [
   { name: 'db', files: ['src/db.js'] },                 // 运行环境 / 版本常量 / IndexedDB & IPC 数据层
   { name: 'websearch', files: ['src/websearch.js'] },   // 联网查询面板（搜索 / AI 追问 / 收藏夹）
+  { name: 'helpimgs', files: ['src/helpimgs.js'] },     // 帮助手册配图（桌面版打包时裁剪，数据走 help-imgs.json）
 ];
 
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

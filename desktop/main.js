@@ -23,6 +23,8 @@ function blog(...args) {
 }
 process.on('uncaughtException', e => blog('uncaughtException:', (e && e.stack) || e));
 process.on('unhandledRejection', e => blog('unhandledRejection:', (e && e.stack) || e));
+/* 排障开关：设 MTK_DEBUG_PORT 环境变量可远程调试页面（打包版不透传命令行开关，须在 ready 前 appendSwitch） */
+if (process.env.MTK_DEBUG_PORT) app.commandLine.appendSwitch('remote-debugging-port', process.env.MTK_DEBUG_PORT);
 
 const { atomicWriteJson, rotateBackup, readJsonWithRecovery } = require('./safeSave');
 /* v1.41.0：全量备份容器与搜索引擎健康度（纯函数模块，见各自文件头注释） */
@@ -1711,6 +1713,16 @@ function regWindow() {
     if (win.isMaximized()) win.unmaximize(); else win.maximize();
   });
   ipcMain.on('win:close', () => { if (win && !win.isDestroyed()) win.close(); });
+  /* v1.42.0：帮助手册配图数据（preload 同步取，见 preload.js 顶部）。
+   * 打包版在 resources/help-imgs.json（afterPack 放置），开发模式在 desktop/ 下。 */
+  ipcMain.on('help:imgs', (e) => {
+    try {
+      const p = app.isPackaged
+        ? path.join(process.resourcesPath, 'help-imgs.json')
+        : path.join(__dirname, 'help-imgs.json');
+      e.returnValue = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null;
+    } catch (err) { console.warn('[帮助配图] 读取失败', err.message); e.returnValue = null; }
+  });
 }
 
 /** 启动流程独立成函数：任何一步抛错都要让用户看见，而不是「进程在跑、桌面没窗口」 */
