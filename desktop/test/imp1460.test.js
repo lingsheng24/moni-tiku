@@ -129,6 +129,9 @@ describe('图谱「只看重要」筛选', () => {
     expect(HTML).toContain("id=\"kpImpChip\"");
     expect(HTML).toContain("'kpNoteChip', 'kpImpChip']");
   });
+  test('复选框已绑 onchange（回归：v1.46.0 漏绑导致点「⭐ 重要」无反应）', () => {
+    expect(HTML).toContain("$('#kpImpChk').onchange = e => setKPImpOnly(e.target.checked);");
+  });
   test('全部筛空时给出指引文案', () => {
     expect(HTML).toContain("还没有重要程度 ≥4 星的知识点");
     expect(HTML).toContain('在题目上点星级标记 ⭐');

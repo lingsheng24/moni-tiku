@@ -208,32 +208,32 @@ const check = (name, ok, extra) => {
       const vis = () => kpGraph.nodes.filter(kpNodeVisible).length;
       const total = kpGraph.nodes.length;
       const before = vis();
-      // 给 kpSyncLegend 打补丁：记录每次调用的 setting 值，定位浮标竞态
-      const origSync = kpSyncLegend;
-      window.__syncLog = [];
-      kpSyncLegend = function () { window.__syncLog.push({ imp: state.settings.kpImpOnly, hasChip: !!document.getElementById('kpImpChip') }); return origSync.apply(this, arguments); };
-      await setKPImpOnly(true);
-      kpSyncLegend = origSync;
+      // 回归：v1.46.1 前 kpImpChk 漏绑 onchange，这里模拟用户真实点击复选框
+      const chk = document.getElementById('kpImpChk');
+      if (!chk) throw new Error('kpImpChk 不存在');
+      chk.checked = true;
+      chk.dispatchEvent(new Event('change'));
+      for (let t = 0; t < 30 && !kpImpOnlyOn(); t++) await new Promise(r => setTimeout(r, 50));
+      // 等浮标同步（setKPImpOnly 里 kvSet 完成后才调 kpSyncLegend）
+      let chipShown = 'TIMEOUT';
+      for (let t = 0; t < 30; t++) {
+        const c = document.getElementById('kpImpChip');
+        chipShown = c ? c.style.display : 'NO-EL';
+        if (chipShown === 'inline-flex') break;
+        await new Promise(r => setTimeout(r, 50));
+      }
       const after = vis();
       const cnt = document.getElementById('kpImpN') ? document.getElementById('kpImpN').textContent : '';
-      const chip = document.getElementById('kpImpChip');
-      const diag = {
-        on: kpImpOnlyOn(),
-        syncHasImp: kpSyncLegend.toString().includes('kpImpChip'),
-        chipBeforeManual: chip ? chip.style.display : 'NO-EL',
-      };
-      kpSyncLegend();   // 手动再同步一次，判断是否被别的渲染竞态覆盖
-      diag.chipAfterManual = chip ? chip.style.display : 'NO-EL';
       const nd = kpGraph.nodes.find(n => n.name === '重要度测试知识点');
       const keep = kpNodeVisible(nd);
-      await setKPImpOnly(false);
+      chk.checked = false;
+      chk.dispatchEvent(new Event('change'));
+      for (let t = 0; t < 30 && kpImpOnlyOn(); t++) await new Promise(r => setTimeout(r, 50));
       const restored = vis();
-      return { total, before, after, cnt, diag, syncLog: window.__syncLog, chipShown: document.getElementById('kpImpChip').style.display, keep, restored,
-        settingOff: state.settings.kpImpOnly };
+      return { total, before, after, cnt, chipShown, keep, restored, settingOff: state.settings.kpImpOnly };
     })()`);
-    check('开「⭐ 重要」后只显示 ≥4 星节点', r4.after < r4.before && r4.keep === true, r4);
-    console.log('  [浮标诊断]', JSON.stringify({ diag: r4.diag, syncLog: r4.syncLog }));
-    check('工具栏计数与浮标出现', r4.diag.chipAfterManual === 'inline-flex' && r4.cnt !== '', r4);
+    check('点击「⭐ 重要」复选框后只显示 ≥4 星节点', r4.after < r4.before && r4.keep === true, r4);
+    check('工具栏计数与浮标出现', r4.chipShown === 'inline-flex' && r4.cnt !== '', r4);
     check('关掉后恢复全部节点', r4.restored === r4.before && r4.settingOff === 0, r4);
 
     /* 5) 题库筛选 */
