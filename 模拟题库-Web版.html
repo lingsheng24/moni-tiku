@@ -511,6 +511,10 @@ body.is-desktop .modal-mask{top:36px}
 .mist-note-edit textarea{width:100%;min-height:88px;margin-top:8px}
 /* ---------- 题目笔记（v1.43.0）：复习时随手记，输入即自动保存 ---------- */
 .qnote{margin:0 0 12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);width:100%;text-align:left}
+.imp-stars{display:inline-flex;align-items:center;cursor:pointer;font-size:13px;line-height:1;letter-spacing:2px;user-select:none;padding:2px 2px}
+.imp-stars i{font-style:normal;color:var(--muted);opacity:.38;transition:transform .12s}
+.imp-stars i.on{opacity:1}
+.imp-stars i:hover{transform:scale(1.35);opacity:1}
 .qnote-hd{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:6px}
 .qnote-hd b{color:var(--primary);font-size:12.5px;font-weight:600}
 .qnote-tip{margin-left:auto;font-size:11.5px;color:var(--muted)}
@@ -638,7 +642,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.45.1';
+const APP_VER = '1.46.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -727,6 +731,7 @@ const state = {
     navOrder: [],           // 导航栏项目排序（拖动生成；空数组 = 默认顺序）
     closeAction: 'tray',    // 桌面版：点关闭按钮的行为（tray=最小化到托盘 / quit=直接退出）
     kpNoteOnly: 0,          // v1.35.0：知识点图谱只看有笔记的知识点
+    kpImpOnly: 0,           // v1.46.0：知识点图谱只看重要程度 ≥4 星的知识点
     searchEngine: 'bingcn', // v1.36.0：联网查询默认引擎（v1.38.0 扩为 bingcn/bing/sogou/so360/aggregate）
   },
   docs: [], questions: [], mistakes: [], practice: [], exams: [], reviews: [],
@@ -1631,6 +1636,45 @@ const dbPut = (store, val, ms = 12000) => withTimeoutP(DB.put(store, val), ms, D
  * 存在 questions[].note 上：不新增表、不用迁移，随题库一起自动备份 / 全量导出 / 换机恢复；
  * 编辑题目用的是 Object.assign，笔记字段不会被覆盖。
  * 复习会话、卡片管理行内答题、题库浏览三处共用同一份数据。 */
+/* ---------- 题目重要程度（v1.46.0） ----------
+ * 存在 questions[].importance 上（1~5，未标记视为 3），与笔记一样随题库备份 / 导出；
+ * 知识点重要程度 = 其下题目的最高星，图谱节点大小与外环颜色按此显示。 */
+const IMP_LABEL = { 1: '了解', 2: '一般', 3: '较重要', 4: '重要', 5: '核心' };
+const IMP_COLOR = { 1: '#94a3b8', 2: '#64748b', 3: '#0ea5e9', 4: '#f59e0b', 5: '#ef4444' };
+function impOf(q) { const n = q && +q.importance || 0; return n >= 1 && n <= 5 ? n : 3; }
+/** 五颗星 pill：点第几颗设为几星；data-qid 供 setImportance 保存后就地替换刷新 */
+function impStarsHTML(q) {
+  const v = impOf(q), col = IMP_COLOR[v];
+  return `<span class="imp-stars" data-qid="${q.id}" title="重要程度：${IMP_LABEL[v]} ★${v}（点击星级可直接调整）">${[1, 2, 3, 4, 5].map(i =>
+    `<i class="${i <= v ? 'on' : ''}" style="${i <= v ? 'color:' + col : ''}" onclick="setImportance(${q.id},${i},event)">★</i>`).join('')}</span>`;
+}
+/** 设置题目重要程度并写盘；失败回滚，成功后就地刷新页面上该题的星 pill 与图谱详情卡 */
+async function setImportance(qid, n, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const q = state.questions.find(x => x.id === qid);
+  if (!q) { toast('题目不存在', 'err'); return; }
+  n = Math.max(1, Math.min(5, +n || 3));
+  if (impOf(q) === n) return;
+  const old = q.importance;
+  q.importance = n;
+  try {
+    if (await dbPut('questions', { ...q }) === DB_TIMEOUT) throw new Error('写入超时');
+    document.querySelectorAll(`.imp-stars[data-qid="${qid}"]`).forEach(el => { el.outerHTML = impStarsHTML(q); });
+    if (typeof curView === 'string' && curView === 'kp') {
+      if (typeof kpSelected === 'string' && kpSelected) {
+        const d = document.getElementById('kpDetail');
+        if (d) d.innerHTML = renderKPDetail(kpSelected);
+      }
+      if (typeof kpDraw === 'function') kpDraw();
+      const cnt = document.getElementById('kpImpN');
+      if (cnt) cnt.textContent = kpImpCount();
+    }
+  } catch (e) {
+    q.importance = old;
+    document.querySelectorAll(`.imp-stars[data-qid="${qid}"]`).forEach(el => { el.outerHTML = impStarsHTML(q); });
+    toast('重要程度保存失败：' + (e && e.message || e), 'err');
+  }
+}
 function qNote(q) { return q && typeof q.note === 'string' ? q.note : ''; }
 /** 保存题目笔记。trim 后与旧值一致直接跳过；写盘超时/失败回滚内存值，避免界面与磁盘不一致 */
 async function saveQNote(qid, text, silent) {
@@ -2461,6 +2505,7 @@ function viewQuestion(id) {
     ${q.source_excerpt ? `<div class="q-src">📎 原文出处：${esc(q.source_excerpt)}</div>` : ''}
     ${qNote(q) ? `<div class="q-note-show">📝 <b>我的笔记</b>：${esc(qNote(q))}</div>` : ''}
     <dl class="kv" style="margin-top:12px">
+      <dt>重要程度</dt><dd>${impStarsHTML(q)}<span style="color:var(--muted);font-size:12px;margin-left:6px">${IMP_LABEL[impOf(q)]}</span></dd>
       <dt>来源文档</dt><dd>${doc ? esc(doc.title) : '—'}</dd>
       <dt>练习记录</dt><dd>${pc.length} 次${rate !== null ? `，正确率 ${rate}%` : ''}</dd>
       <dt>创建时间</dt><dd>${fmtDate(q.created_at)}</dd>
@@ -2684,7 +2729,7 @@ async function runLocalGen() {
 }
 
 /* ============ 题库管理 ============ */
-let bankFilter = { doc: '', type: '', diff: '', kw: '', subj: '' };
+let bankFilter = { doc: '', type: '', diff: '', kw: '', subj: '', imp: '' };
 let bankPage = 1, bankSel = new Set();
 const PAGE_SIZE = 15;
 async function viewBank() {
@@ -2693,7 +2738,8 @@ async function viewBank() {
     (!bankFilter.subj || matchSubject(q, bankFilter.subj)) &&
     (!bankFilter.doc || String(q.document_id) === bankFilter.doc) &&
     (!bankFilter.type || q.type === bankFilter.type) &&
-    (!bankFilter.diff || q.difficulty === bankFilter.diff));
+    (!bankFilter.diff || q.difficulty === bankFilter.diff) &&
+    (!bankFilter.imp || impOf(q) === +bankFilter.imp));
   if (bankFilter.kw) {
     const k = bankFilter.kw.toLowerCase();
     qs = qs.filter(q => (q.content + q.answer + (q.explanation || '') + (q.knowledge_point || '') + (q.note || '')).toLowerCase().includes(k));
@@ -2717,6 +2763,8 @@ async function viewBank() {
         ${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${bankFilter.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
       <select id="fDiff" style="width:auto"><option value="">全部难度</option>
         ${Object.entries(DIFFS).map(([k, v]) => `<option value="${k}" ${bankFilter.diff === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      <select id="fImp" style="width:auto" title="按重要程度筛选"><option value="">全部重要度</option>
+        ${[5, 4, 3, 2, 1].map(n => `<option value="${n}" ${bankFilter.imp === String(n) ? 'selected' : ''}>${'★'.repeat(n)} ${IMP_LABEL[n]}</option>`).join('')}</select>
       <span style="flex:1"></span>
       <button class="ghost" onclick="delSelected()" id="delSelBtn" disabled>删除所选 (0)</button>
       <button class="ghost" onclick="exportWord()">📤 导出 Word</button>
@@ -2735,6 +2783,7 @@ async function viewBank() {
         <span class="pill blue">${TYPES[q.type]}</span><span class="pill gray">${DIFFS[q.difficulty] || q.difficulty}</span>
         ${(() => { const s = qSubjectId(q); return s ? `<span class="pill gray">${subjTag(s)}${esc(subjNameOf(s))}</span>` : ''; })()}
         ${q.knowledge_point ? `<span class="pill amber">${esc(q.knowledge_point)}</span>` : ''}
+        ${impStarsHTML(q)}
         ${doc ? `<span class="pill gray">📄 ${esc(doc.title)}</span>` : ''}
         ${rate !== null ? `<span class="pill ${rate >= 70 ? 'green' : 'red'}">正确率 ${rate}% (${pc.length})</span>` : ''}
         <span style="flex:1"></span>
@@ -2764,6 +2813,7 @@ async function viewBank() {
   $('#fDoc').onchange = e => { bankFilter.doc = e.target.value; bankPage = 1; viewBank(); };
   $('#fType').onchange = e => { bankFilter.type = e.target.value; bankPage = 1; viewBank(); };
   $('#fDiff').onchange = e => { bankFilter.diff = e.target.value; bankPage = 1; viewBank(); };
+  $('#fImp').onchange = e => { bankFilter.imp = e.target.value; bankPage = 1; viewBank(); };
   $('#fClear').onclick = () => { bankFilter = { doc: '', type: '', diff: '', kw: '', subj: '' }; bankPage = 1; viewBank(); };
   document.querySelectorAll('#bankList .chk').forEach(c => c.onchange = e => {
     const id = +e.target.dataset.id;
@@ -2855,7 +2905,8 @@ function filteredQuestions() {
     (!bankFilter.subj || matchSubject(q, bankFilter.subj)) &&
     (!bankFilter.doc || String(q.document_id) === bankFilter.doc) &&
     (!bankFilter.type || q.type === bankFilter.type) &&
-    (!bankFilter.diff || q.difficulty === bankFilter.diff));
+    (!bankFilter.diff || q.difficulty === bankFilter.diff) &&
+    (!bankFilter.imp || impOf(q) === +bankFilter.imp));
   if (bankFilter.kw) {
     const k = bankFilter.kw.toLowerCase();
     qs = qs.filter(q => (q.content + q.answer + (q.explanation || '') + (q.knowledge_point || '') + (q.note || '')).toLowerCase().includes(k));
@@ -3153,7 +3204,7 @@ function buildGraph() {
   const push = name => {
     if (!index.has(name)) {
       index.set(name, nodes.length);
-      nodes.push({ name, qids: [], ids: new Set() });
+      nodes.push({ name, qids: [], ids: new Set(), imp: 1 });
     }
     return index.get(name);
   };
@@ -3167,7 +3218,7 @@ function buildGraph() {
     const ns = splitKP(q.knowledge_point);
     const idxs = ns.map(push);
     if (!ns.length) { const i = push('未分类'); idxs.push(i); }
-    for (const i of idxs) { nodes[i].qids.push(q.id); nodes[i].ids.add(q.id); }
+    for (const i of idxs) { nodes[i].qids.push(q.id); nodes[i].ids.add(q.id); nodes[i].imp = Math.max(nodes[i].imp, impOf(q)); }
     qKp.set(q.id, idxs);
     const sec = sectionOfQuestion(q);
     if (sec) for (const i of idxs) bump(nodes[i].name, sec);
@@ -3389,12 +3440,24 @@ function kpSyncLegend() {
       nchip.style.display = 'none';
     }
   }
+  /* v1.46.0：只看重要的浮标 */
+  const ichip = document.getElementById('kpImpChip');
+  if (ichip) {
+    if (kpImpOnlyOn()) {
+      const n = (kpGraph && kpGraph.nodes ? kpGraph.nodes : []).filter(x => (x.imp || 3) >= 4).length;
+      ichip.style.display = 'inline-flex';
+      const ct = document.getElementById('kpImpCnt');
+      if (ct) ct.textContent = n ? `（${n} 个知识点）` : '（还没有 ≥4 星的知识点）';
+    } else {
+      ichip.style.display = 'none';
+    }
+  }
   kpStackChips();
 }
-/** 左上角浮标（选中 / 关联过滤 / 掌握度过滤 / 有笔记过滤）竖向排开，互不遮挡 */
+/** 左上角浮标（选中 / 关联过滤 / 掌握度过滤 / 有笔记过滤 / 重要过滤）竖向排开，互不遮挡 */
 function kpStackChips() {
   let top = 12;
-  ['kpSelChip', 'kpFilterChip', 'kpMasteryChip', 'kpNoteChip'].forEach(id => {
+  ['kpSelChip', 'kpFilterChip', 'kpMasteryChip', 'kpNoteChip', 'kpImpChip'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const shown = el.style.display && el.style.display !== 'none';
@@ -3692,11 +3755,14 @@ function kpDraw() {
     ctx.fillStyle = kpColors.muted;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = '600 14px system-ui,"Microsoft YaHei",sans-serif';
-    const byNote = kpNoteOnlyOn();
+    const byNote = kpNoteOnlyOn(), byImp = kpImpOnlyOn();
     ctx.fillText(byNote ? '当前题库还没有任何知识点笔记'
+      : byImp ? '还没有重要程度 ≥4 星的知识点'
       : `当前筛选「${KP_M_NAME[kpMasteryFilter] || '掌握度'}」下没有知识点`, cx, cy - 10);
     ctx.font = '12px system-ui,"Microsoft YaHei",sans-serif';
-    ctx.fillText(byNote ? '去「知识库」写第一条，或关掉「📝 有笔记」' : '点画布左上角的 ✕ 恢复全部', cx, cy + 14);
+    ctx.fillText(byNote ? '去「知识库」写第一条，或关掉「📝 有笔记」'
+      : byImp ? '在题目上点星级标记 ⭐，或关掉「⭐ 重要」'
+      : '点画布左上角的 ✕ 恢复全部', cx, cy + 14);
     ctx.textBaseline = 'top';
     return;
   }
@@ -3714,8 +3780,9 @@ function kpDraw() {
     if (!kpNodeVisible(nd)) return;                          // v1.28.4 掌握度筛选 / v1.35.0 有笔记筛选
     const isSel = kpSelected === nd.name, isHover = kpHover === i;
     const isNbr = nbrNames.has(nd.name) && !isSel && !isHover;
-    /* v1.23.0：节点大小固定（不再随题量变化），只保留近大远小的透视 */
-    const r = Math.max(3, 8 * p.s);
+    /* v1.23.0：节点大小不再随题量变化；v1.46.0：随知识点重要程度微调（1星 0.85× … 5星 1.25×） */
+    const imp = nd.imp || 3;
+    const r = Math.max(3, 8 * p.s * (0.85 + (imp - 3) * 0.12));
     const fade = 0.34 + 0.66 * ((p.z + 1) / 2) * (focusName && !isSel && !isHover && !isNbr ? 0.35 : 1);
     if (isSel || isHover) {                                   // 选中/悬停光环
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r + 7, 0, Math.PI * 2);
@@ -3740,6 +3807,12 @@ function kpDraw() {
       ctx.beginPath(); ctx.arc(bx, by, Math.max(2.2, r * 0.30), 0, Math.PI * 2);
       ctx.fillStyle = '#f59e0b'; ctx.fill();
       ctx.lineWidth = 1; ctx.strokeStyle = kpAlpha('#ffffff', 0.9); ctx.stroke();
+    }
+    /* v1.46.0：重要程度 ≥4 星的知识点 —— 最外圈加一道彩色环（4星橙 / 5星红），一眼看出哪些是重点 */
+    if (imp >= 4) {
+      ctx.beginPath(); ctx.arc(p.sx, p.sy, r + (nc ? 6.2 : 3.2), 0, Math.PI * 2);
+      ctx.strokeStyle = kpAlpha(IMP_COLOR[imp], 0.32 + 0.48 * ((p.z + 1) / 2));
+      ctx.lineWidth = 1.7; ctx.stroke();
     }
     /* v1.23.0：节点内不再显示题量数字，信息改由悬停提示呈现 */
     // ③ 标签：正面、重要或高亮的才画，避免背面糊成一团
@@ -3769,7 +3842,7 @@ function kpPick(mx, my) {
   let best = -1, bestZ = -Infinity;
   kpProj.forEach((p, i) => {
     if (!kpNodeVisible(p.n)) return;                        // 被筛选掉的节点不可点
-    const r = Math.max(6, 8 * p.s);
+    const r = Math.max(6, 8 * p.s * (0.85 + ((p.n.imp || 3) - 3) * 0.12));
     if (Math.hypot(mx - p.sx, my - p.sy) <= r + 3 && p.z > bestZ) { best = i; bestZ = p.z; }
   });
   return best;
@@ -3917,6 +3990,7 @@ function kpTipShow(i, mx, my) {
     : '';
   const html = `<b>${esc(nd.name)}</b><br>` +
     `${nd.size} 题 · ${nd.rate === null ? '未练习' : '正确率 ' + nd.rate + '%'}` + secTxt +
+    `<br><span style="color:${IMP_COLOR[nd.imp || 3]}">⭐ 重要程度：${'★'.repeat(nd.imp || 3)} ${IMP_LABEL[nd.imp || 3]}</span><span style="color:var(--muted)">（节点越大星越多）</span>` +
     (kpNoteCount(nd.name) ? `<br><span style="color:var(--amber)">📝 ${kpNoteCount(nd.name)} 条笔记</span><span style="color:var(--muted)">（单击节点可看）</span>` : '') +
     (nb.length
       ? `<br><span style="color:var(--primary)">🔗 双链 ${nb.length} 个</span><span style="color:var(--muted)">（${kpKindCount(nb)}）</span>` +
@@ -3968,6 +4042,7 @@ function kpRelModal(name) {
     <div class="kp-rel-sec"><b>关联题目（${qs.length}）</b>
       ${qs.map(q => `<div class="q-item">
         <div class="q-head"><span class="pill blue">${TYPES[q.type]}</span><span class="pill gray">${DIFFS[q.difficulty] || ''}</span>
+          ${impStarsHTML(q)}
           <span style="flex:1;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(kpsOf(q).join('、'))}</span>
           <button class="sm ghost" onclick="viewQuestion(${q.id})">详情</button></div>
         <div class="q-content">${esc(q.content)}</div>
@@ -4010,6 +4085,7 @@ function kpSectionModal(label) {
     <div class="kp-rel-sec"><b>该章节下的题目（${qs.length}）</b>
       ${qs.slice(0, 30).map(q => `<div class="q-item">
         <div class="q-head"><span class="pill blue">${TYPES[q.type]}</span><span class="pill gray">${DIFFS[q.difficulty] || ''}</span>
+          ${impStarsHTML(q)}
           <span style="flex:1;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(splitKP(q.knowledge_point).join('、'))}</span>
           <button class="sm ghost" onclick="viewQuestion(${q.id})">详情</button></div>
         <div class="q-content">${esc(q.content)}</div>
@@ -4059,6 +4135,9 @@ async function viewKP(reset) {
     <label class="kp-tgl" title="只看有笔记的知识点：知识点笔记 / 错题笔记 / 知识库手记都算，方便复习自己写过的内容">
       <input type="checkbox" id="kpNoteChk" ${kpNoteOnlyOn() ? 'checked' : ''}> 📝 有笔记（${noteKpN}）
     </label>
+    <label class="kp-tgl" title="只看重要程度 ≥4 星（重要 / 核心）的知识点；星标在题目上点星级即可设置">
+      <input type="checkbox" id="kpImpChk" ${kpImpOnlyOn() ? 'checked' : ''}> ⭐ 重要（<span id="kpImpN">${kpImpCount()}</span>）
+    </label>
     <span class="pill gray">掌握度（点一下只看该档）</span>
     <span id="kpMastery">
       <button type="button" class="kp-legend-item ${kpMasteryFilter === 'good' ? 'active' : ''}" data-m="good" aria-pressed="${kpMasteryFilter === 'good'}" title="只看已掌握（正确率 ≥80%）的知识点，再点一次恢复全部"><i class="dot" style="background:#16a34a"></i>≥80%</button>
@@ -4098,6 +4177,7 @@ async function viewKP(reset) {
     <div class="kp-filter-chip" id="kpFilterChip">只看 <b id="kpFilterName"></b><span id="kpFilterCnt"></span><button onclick="kpSetEdgeFilter(null)" title="恢复显示全部关联">✕</button></div>
     <div class="kp-filter-chip" id="kpMasteryChip">只看 <b id="kpMName"></b><span id="kpMCnt"></span><button onclick="kpSetMasteryFilter(null)" title="恢复显示全部知识点">✕</button></div>
     <div class="kp-filter-chip" id="kpNoteChip">只看 <b>有笔记</b><span id="kpNoteCnt"></span><button onclick="setKPNoteOnly(null)" title="恢复显示全部知识点">✕</button></div>
+    <div class="kp-filter-chip" id="kpImpChip">只看 <b>重要 ≥4 星</b><span id="kpImpCnt"></span><button onclick="setKPImpOnly(null)" title="恢复显示全部知识点">✕</button></div>
     <canvas id="kpCanvas" style="width:100%;height:${kpFull ? '72vh' : '480px'};display:block;background:var(--panel2);border-radius:10px;cursor:grab;touch-action:none"></canvas>
     <div id="kpTip"></div>
   </div></div>
@@ -4223,6 +4303,7 @@ function renderKPDetail(name) {
       ${nbs.length ? `<span class="pill blue" style="cursor:pointer" onclick="kpRelModal('${esc(name)}')">🔗 双链 ${nbs.length}</span>` : '<span class="pill gray">暂无关联</span>'}
       ${mists.length ? `<span class="pill red" style="cursor:pointer" onclick="go('mist')" title="去错题本">📕 错题 ${mists.length} 条</span>` : ''}
       ${kpNoteCount(name) ? `<span class="pill amber" style="cursor:pointer" onclick="go('kb')" title="去知识库看这个知识点的全部笔记">📝 笔记 ${kpNoteCount(name)} 条</span>` : ''}
+      ${node.imp >= 4 ? `<span class="pill ${node.imp >= 5 ? 'red' : 'amber'}" title="该知识点下题目的最高重要程度，图上外环颜色与此对应">⭐ ${IMP_LABEL[node.imp]} ${'★'.repeat(node.imp)}</span>` : ''}
       ${qNotes.length ? `<span class="pill violet" style="cursor:pointer" onclick="scrollKPNotes()" title="该知识点下每道题的笔记，点击跳到下方列表">✏️ 题目笔记 ${qNotes.length} 条</span>` : ''}
       <span style="flex:1"></span>
       <button class="sm ghost" data-kp="${esc(name)}" onclick="wsOpen(this.dataset.kp, this.dataset.kp)" title="联网查询这个知识点，可把结果存进知识库">🔍 联网查询</button>
@@ -4292,6 +4373,7 @@ function renderKPDetail(name) {
     </div>` : ''}
     ${qs.map(q => `<div class="q-item">
       <div class="q-head"><span class="pill blue">${TYPES[q.type]}</span><span class="pill gray">${DIFFS[q.difficulty] || ''}</span>
+        ${impStarsHTML(q)}
         ${qNote(q) ? '<span class="pill violet">📝 有笔记</span>' : ''}
         <button class="sm ghost" onclick="viewQuestion(${q.id})">详情</button></div>
       <div class="q-content">${esc(q.content)}</div>
@@ -4480,9 +4562,10 @@ function kbNoteCountsRefresh() {
 }
 function kpNoteCount(name) { return kpNoteCounts.get(name) || 0; }
 function kpNoteOnlyOn() { return state.settings.kpNoteOnly === 1; }
-/** 图谱节点是否可见：掌握度筛选 且（未开笔记筛选 或 该知识点有笔记） */
+/** 图谱节点是否可见：掌握度筛选 且（未开笔记筛选 或 该知识点有笔记）且（未开重要筛选 或 重要程度 ≥4 星） */
 function kpNodeVisible(nd) {
   if (!kpMasteryMatch(nd)) return false;
+  if (kpImpOnlyOn() && (nd.imp || 3) < 4) return false;
   return !kpNoteOnlyOn() || kpNoteCount(nd && nd.name) > 0;
 }
 /** 图谱工具栏「📝 有笔记」开关 */
@@ -4493,6 +4576,22 @@ async function setKPNoteOnly(on) {
   if (chk) chk.checked = !!on;
   kpSyncLegend(); kpDraw();
   toast(on ? '只看有笔记的知识点，再点一次「📝 有笔记」恢复全部' : '已恢复显示全部知识点');
+}
+/* ---------- v1.46.0：只看重要（≥4 星）的知识点 ---------- */
+function kpImpOnlyOn() { return state.settings.kpImpOnly === 1; }
+/** 图上重要程度 ≥4 星的知识点数量（工具栏计数用） */
+function kpImpCount() {
+  const ns = (typeof kpGraph !== 'undefined' && kpGraph && kpGraph.nodes) ? kpGraph.nodes : [];
+  return ns.filter(n => (n.imp || 3) >= 4).length;
+}
+/** 图谱工具栏「⭐ 重要」开关：只显示知识点下有 ≥4 星题目的节点 */
+async function setKPImpOnly(on) {
+  state.settings.kpImpOnly = on ? 1 : 0;
+  await DB.kvSet('settings', state.settings);
+  const chk = document.getElementById('kpImpChk');
+  if (chk) chk.checked = !!on;
+  kpSyncLegend(); kpDraw();
+  toast(on ? '只看重要程度 ≥4 星的知识点，再点一次「⭐ 重要」恢复全部' : '已恢复显示全部知识点');
 }
 
 /* ---------- 知识库页面 ---------- */
@@ -4556,6 +4655,7 @@ function kbShowQuestion(qid) {
       <span class="pill blue">${esc(TYPES[q.type] || q.type || '题目')}</span>
       ${q.knowledge_point ? `<span class="pill gray">🧠 ${esc(q.knowledge_point)}</span>` : ''}
       ${q.difficulty ? `<span class="pill gray">难度 ${esc(String(q.difficulty))}</span>` : ''}
+      ${impStarsHTML(q)}
     </div>
     <div style="font-size:17px;line-height:1.7">${esc(q.content || '')}</div>
     ${opts ? `<div style="margin-top:10px">${opts}</div>` : ''}
@@ -5599,6 +5699,7 @@ function renderRevCard() {
       ${card.reps ? `<span class="pill gray">第 ${card.reps} 轮</span>` : ''}
       ${card.lapses ? `<span class="pill amber">遗忘 ${card.lapses} 次</span>` : ''}
       ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，在题目上方可继续修改">📝 已记笔记</span>` : ''}
+      ${impStarsHTML(q)}
     </div>
     ${qNoteHTML(q, 'sess' + card.id)}
     <div class="rev-q">${esc(q.content)}</div>
@@ -5915,6 +6016,7 @@ async function viewReview() {
           <button class="sm danger" onclick="delCard(${c.id})">移除</button></span></td>
       </tr>
       <tr id="rvrow-${c.id}" class="hidden"><td colspan="6" style="background:var(--bg)"><div class="mist-ans" id="rv-${c.id}" style="margin-top:0">
+        <div class="row" style="margin-bottom:8px;flex-wrap:wrap">${impStarsHTML(q)}<span style="color:var(--muted);font-size:12px">点击星级标记重要程度</span></div>
         ${qNoteHTML(q, 'rv' + c.id)}
         <div style="color:var(--muted);font-size:12px;margin-bottom:8px">${esc(q?.content || '')}</div>
         <div id="rv-input-${c.id}">${revAnsInput(q, c.id)}</div>
@@ -6199,7 +6301,7 @@ function renderQuiz() {
   </div>
   <div class="q-item">
     <div class="q-head"><span class="pill blue">${TYPES[it.type]}</span><span class="pill gray">${DIFFS[it.difficulty] || it.difficulty}</span>
-      ${it.knowledge_point ? `<span class="pill amber">${esc(it.knowledge_point)}</span>` : ''}</div>
+      ${it.knowledge_point ? `<span class="pill amber">${esc(it.knowledge_point)}</span>` : ''}${impStarsHTML(it)}</div>
     ${qNoteHTML(it, 'quiz' + it.id)}
     <div class="q-content" style="font-size:16px">${esc(it.content)}</div>
     <div style="margin-top:10px" id="answerArea">
@@ -8372,6 +8474,7 @@ const HELP_SECTIONS = [
       <div class="help-h4">随手记笔记</div>
       <ul>
         <li>题干上方有「📝 我的笔记」输入框：边做题边写思路、易错点和记忆口诀，<b>停手约 1 秒自动保存</b>，也可按 <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Enter</span> 立即保存。</li>
+        <li>题干上方还有<b>五颗星（⭐ 重要程度）</b>：觉得这道题重要就点高星（1 了解 · 2 一般 · 3 较重要 · 4 重要 · 5 核心），点了立即保存；重要程度会汇总到知识点图谱，节点大小与外环颜色随之变化。</li>
         <li>切题、点「下一题」或提交答案前会先把笔记存好；笔记存在题目上，下次再练到同一题会自动带出来，题库管理里也能查看修改。</li>
       </ul>
       <div class="help-h4">快捷键</div>
@@ -8467,6 +8570,7 @@ const HELP_SECTIONS = [
       <div class="help-h4">随手记笔记</div>
       <ul>
         <li>每张卡题目上方都有「📝 我的笔记」输入框，边复习边写思路、易错点和记忆口诀，<b>输入停下约 1 秒就自动保存</b>，也可以按 <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Enter</span> 立即保存。</li>
+        <li>标签行里还有<b>五颗星（⭐ 重要程度）</b>，点第几颗设为几星，随手标记「重要 / 核心」，图谱会按重要程度显示节点。</li>
         <li>写完不用管，直接按 <span class="help-kbd">空格</span> 看答案或点档位评分，软件会先把笔记落盘再翻下一张。</li>
         <li>笔记跟着<b>题目</b>走：下次复习同一题会原样带出来，题库管理里有「📝 笔记」按钮可查看和修改，也会随自动备份、全量导出一起保存。</li>
         <li>卡片管理表格里，写过笔记的卡会标出「📝 有笔记」；搜索框也能搜到笔记内容。</li>
@@ -8506,13 +8610,14 @@ const HELP_SECTIONS = [
       </ul>
       <div class="help-h4">图的读法</div>
       <ul>
-        <li><b>节点大小固定</b>：所有知识点圆点同样大，不随题量变化。</li>
+        <li><b>节点大小随重要程度变化</b>：知识点的重要程度取其下题目的<b>最高星</b>（默认 3 星），节点随之变大变小（1 星最小组 0.85×、5 星最大 1.25×）；<b>≥4 星的知识点外圈还有一道彩色环</b>（<span class="pill amber">4 星 橙</span> <span class="pill red">5 星 红</span>），一眼看出哪些是重点。</li>
         <li><b>节点颜色</b>：<span class="pill green">绿 已掌握 ≥80%</span> <span class="pill amber">黄 待巩固 60–79%</span> <span class="pill red">红 薄弱 &lt;60%</span> <span class="pill gray">灰 未练习</span>——这四色图例本身也是按钮：<b>点一下只看这一档</b>的知识点（画布左上角出现「只看 薄弱 &lt;60%（N 个）」浮标），再点一次或点 ✕ 恢复。适合考前只盯薄弱点、或先看哪些还没练过。</li>
         <li><b>连线常态是细线</b>（颜色淡，不抢节点）；<b>鼠标悬停或单击选中某个知识点</b>时，与它相连的线才<b>加粗、加深颜色</b>（同题线变深蓝、章节线变深青、相似线变深紫），并画出双向箭头，链上的邻居亮起淡蓝光环，其余节点与连线自动淡出——一眼看清它的关系网。</li>
+        <li><b>⭐ 重要程度</b>：复习、答题练习、题库管理里每道题上方都有五颗星，<b>点第几颗就设为几星</b>（1 了解 · 2 一般 · 3 较重要 · 4 重要 · 5 核心），随手可改；知识点取其下题目的最高星。工具栏「⭐ 重要」开关只看 ≥4 星的知识点；题库管理还能按重要程度筛选、导出 Word 时也跟随该筛选。</li>
       </ul>
       <div class="help-h4">操作</div>
       <ul>
-        <li><b>拖动</b>旋转球体，<b>滚轮</b>缩放，<b>悬停</b>弹出提示（知识点名、题量、正确率、章节、双链个数与分类）；<b>鼠标停在节点上时球体会自动停止旋转</b>，移开立刻继续，方便看清单个知识点。</li>
+        <li><b>拖动</b>旋转球体，<b>滚轮</b>缩放，<b>悬停</b>弹出提示（知识点名、题量、正确率、重要程度、章节、双链个数与分类）；<b>鼠标停在节点上时球体会自动停止旋转</b>，移开立刻继续，方便看清单个知识点。</li>
         <li><b>斥力调节</b>：右上角 <b>⇹</b> 按钮展开滑块（0.5×–2.5×，默认 1.0×）。三种双链全开、知识点很密时，把它<b>往右调大</b>——球面上的点会被推得更开、不再挤成一坨；点太散则往左调小。拖动时实时重排，松手后记住设置，点「默认」一键把当前这一组回到 1.0×。<b>斥力是按科目分别记忆的</b>：面板上会写明「适用于 全部科目 / 某科目」，你在「刑法」调到 1.6×、切到「民法」仍是它自己的值，互不影响——不同科目的知识点密度本来就不一样。</li>
         <li><b>单击</b>节点选中并在下方展开详情（双链标签、章节归属、题目、错题、笔记），点详情卡里的双链标签可<b>直接跳到那个知识点</b>；标签颜色对应关系类型（蓝=同题、灰=同章节、黄=题干相似）。</li>
         <li><b>题目笔记自动挂到知识点</b>：复习或答题练习时在题目上方写的「📝 我的笔记」，会按这道题的知识点自动出现在对应知识点的详情卡里——标题旁的 <span class="pill violet">✏️ 题目笔记 N 条</span> 点一下跳到该区块，每条都能「📖 看原题」「🔁 复习」；题目列表里也会直接带出笔记。这里看到的就是原题上的笔记，改它等于改原题；节点上的琥珀小点和「只看有笔记」开关同样把题目笔记算进去。</li>

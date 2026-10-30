@@ -847,6 +847,7 @@ function renderRevCard() {
       ${card.reps ? `<span class="pill gray">第 ${card.reps} 轮</span>` : ''}
       ${card.lapses ? `<span class="pill amber">遗忘 ${card.lapses} 次</span>` : ''}
       ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，在题目上方可继续修改">📝 已记笔记</span>` : ''}
+      ${impStarsHTML(q)}
     </div>
     ${qNoteHTML(q, 'sess' + card.id)}
     <div class="rev-q">${esc(q.content)}</div>
