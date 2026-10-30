@@ -642,7 +642,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.46.0';
+const APP_VER = '1.46.1';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -5692,6 +5692,7 @@ function renderRevCard() {
   <h1>间隔复习</h1><div class="sub">第 ${done + 1} / ${total} 张卡 · 已评 ${rev.rated} 张 · 忘记 ${rev.again} 张</div>
   <div class="progress" style="margin-bottom:14px"><i style="width:${done / total * 100}%"></i></div>
   <div class="card rev-card">
+    ${qNoteHTML(q, 'sess' + card.id)}
     <div class="rev-chip" style="margin-bottom:12px">
       <span class="pill blue">${TYPES[q.type]}</span>
       <span class="pill gray">${DIFFS[q.difficulty] || ''}</span>
@@ -5701,7 +5702,6 @@ function renderRevCard() {
       ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，在题目上方可继续修改">📝 已记笔记</span>` : ''}
       ${impStarsHTML(q)}
     </div>
-    ${qNoteHTML(q, 'sess' + card.id)}
     <div class="rev-q">${esc(q.content)}</div>
     <div id="revAnsWrap" class="${mode === 'answer' ? '' : 'hidden'}" style="width:100%;text-align:left;margin-top:6px">
       <div id="revAnswerArea">${mode === 'answer' ? revAnsInput(q, card.id) : ''}</div>
@@ -6016,8 +6016,8 @@ async function viewReview() {
           <button class="sm danger" onclick="delCard(${c.id})">移除</button></span></td>
       </tr>
       <tr id="rvrow-${c.id}" class="hidden"><td colspan="6" style="background:var(--bg)"><div class="mist-ans" id="rv-${c.id}" style="margin-top:0">
-        <div class="row" style="margin-bottom:8px;flex-wrap:wrap">${impStarsHTML(q)}<span style="color:var(--muted);font-size:12px">点击星级标记重要程度</span></div>
         ${qNoteHTML(q, 'rv' + c.id)}
+        <div class="row" style="margin-bottom:8px;flex-wrap:wrap">${impStarsHTML(q)}<span style="color:var(--muted);font-size:12px">点击星级标记重要程度</span></div>
         <div style="color:var(--muted);font-size:12px;margin-bottom:8px">${esc(q?.content || '')}</div>
         <div id="rv-input-${c.id}">${revAnsInput(q, c.id)}</div>
         <div class="row" style="margin-top:10px">
@@ -6300,9 +6300,9 @@ function renderQuiz() {
     }).join('')}
   </div>
   <div class="q-item">
+    ${qNoteHTML(it, 'quiz' + it.id)}
     <div class="q-head"><span class="pill blue">${TYPES[it.type]}</span><span class="pill gray">${DIFFS[it.difficulty] || it.difficulty}</span>
       ${it.knowledge_point ? `<span class="pill amber">${esc(it.knowledge_point)}</span>` : ''}${impStarsHTML(it)}</div>
-    ${qNoteHTML(it, 'quiz' + it.id)}
     <div class="q-content" style="font-size:16px">${esc(it.content)}</div>
     <div style="margin-top:10px" id="answerArea">
       ${renderAnswerInput(it, saved)}

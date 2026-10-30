@@ -840,6 +840,7 @@ function renderRevCard() {
   <h1>间隔复习</h1><div class="sub">第 ${done + 1} / ${total} 张卡 · 已评 ${rev.rated} 张 · 忘记 ${rev.again} 张</div>
   <div class="progress" style="margin-bottom:14px"><i style="width:${done / total * 100}%"></i></div>
   <div class="card rev-card">
+    ${qNoteHTML(q, 'sess' + card.id)}
     <div class="rev-chip" style="margin-bottom:12px">
       <span class="pill blue">${TYPES[q.type]}</span>
       <span class="pill gray">${DIFFS[q.difficulty] || ''}</span>
@@ -849,7 +850,6 @@ function renderRevCard() {
       ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，在题目上方可继续修改">📝 已记笔记</span>` : ''}
       ${impStarsHTML(q)}
     </div>
-    ${qNoteHTML(q, 'sess' + card.id)}
     <div class="rev-q">${esc(q.content)}</div>
     <div id="revAnsWrap" class="${mode === 'answer' ? '' : 'hidden'}" style="width:100%;text-align:left;margin-top:6px">
       <div id="revAnswerArea">${mode === 'answer' ? revAnsInput(q, card.id) : ''}</div>
