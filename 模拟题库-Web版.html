@@ -646,7 +646,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.48.1';
+const APP_VER = '1.48.2';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -2420,6 +2420,7 @@ async function viewDocs() {
     <div style="margin-top:14px">
       <button class="ghost" id="pasteBtn">📋 粘贴文本创建文档</button>
       <button class="ghost" onclick="qTplExport()">📤 导出出题模板</button>
+      <button class="ghost" onclick="qTplImportModal()">📥 导入模板题目</button>
       <div id="pasteBox" class="hidden" style="margin-top:10px">
         <input id="pasteTitle" placeholder="文档标题（可选）" style="margin-bottom:8px">
         <textarea id="pasteText" rows="6" placeholder="把学习资料、笔记、章节内容粘贴到这里…"></textarea>
@@ -2771,6 +2772,7 @@ async function viewBank() {
       <select id="fImp" style="width:auto" title="按重要程度筛选"><option value="">全部重要度</option>
         ${[5, 4, 3, 2, 1].map(n => `<option value="${n}" ${bankFilter.imp === String(n) ? 'selected' : ''}>${'★'.repeat(n)} ${IMP_LABEL[n]}</option>`).join('')}</select>
       <span style="flex:1"></span>
+      <button class="ghost" onclick="qTplImportModal()">📥 导入模板题目</button>
       <button class="ghost" onclick="delSelected()" id="delSelBtn" disabled>删除所选 (0)</button>
       <button class="ghost" onclick="exportWord()">📤 导出 Word</button>
       <button class="ghost" onclick="exportPDF()">🖨 打印 / PDF</button>
@@ -3081,6 +3083,151 @@ function exportQTemplate() {
     const fname = '出题模板_' + date + '.doc';
     saveAs(fname, html, 'doc', 'Word 文档');
   }
+}
+
+/* ---------- 出题模板导入（把填好的模板批量导入回题库） ---------- */
+let qTplParsed = null;   // 解析结果：[{q, isExample}]
+function qTplImportModal() {
+  modal(`<h3 style="margin-top:0">📥 导入模板题目</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:-6px">导入用「📤 导出出题模板」导出并填好的模板文件；也可以在 Excel 里全选复制表格后直接粘贴</p>
+    <div class="drop" id="qTplDrop" style="padding:14px">
+      <div style="font-size:22px">📄</div>
+      <p style="margin:4px 0"><b>点击选择模板文件</b>（.xls / .doc / .html）</p>
+      <p style="font-size:12px;color:var(--muted);margin:0">若是 .xlsx 或真二进制 Excel 文件无法解析时，请改用下方粘贴方式</p>
+      <input type="file" id="qTplFile" accept=".xls,.doc,.html,.htm" class="hidden">
+    </div>
+    <div class="f" style="margin-top:10px"><span>或粘贴表格（在 Excel 中全选复制，粘贴到这里）</span>
+      <textarea id="qTplPaste" rows="6" placeholder="从 Excel 全选复制后，点这里按 Ctrl+V 粘贴"></textarea></div>
+    <div class="row" style="justify-content:flex-end;margin-top:12px">
+      <button class="ghost" onclick="closeModal()">取消</button>
+      <button class="primary" id="qTplParseBtn">解析预览</button>
+    </div>`);
+  const drop = $('#qTplDrop'), fi = $('#qTplFile');
+  drop.onclick = () => fi.click();
+  $('#qTplParseBtn').onclick = async () => {
+    if (fi.files && fi.files.length) {
+      const f = fi.files[0];
+      let text = '';
+      try { text = await f.text(); } catch (e) { toast('读取文件失败：' + e.message, 'err'); return; }
+      qTplParseAndPreview(text);
+    } else {
+      const t = $('#qTplPaste').value.trim();
+      if (!t) { toast('请先选择文件或粘贴表格', 'err'); return; }
+      qTplParseAndPreview(t);
+    }
+  };
+}
+/** TSV 解析（Excel 复制格式）：处理引号内的换行与制表符 */
+function qTplParseTSV(text) {
+  const rows = [];
+  let cur = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else inQ = false; }
+      else cell += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === '\t') { cur.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      cur.push(cell); cell = '';
+      if (cur.some(c => c.trim())) rows.push(cur);
+      cur = [];
+    } else cell += ch;
+  }
+  cur.push(cell);
+  if (cur.some(c => c.trim())) rows.push(cur);
+  return rows;
+}
+/** 一行 12 列 → 题目对象；题干为空返回 null。纯函数便于测试 */
+function qTplRowToQ(cells) {
+  const g = i => String(cells[i] || '').replace(/&nbsp;/gi, ' ').replace(/\u00a0/g, ' ').trim();
+  const content = g(5);
+  if (!content) return null;
+  const typeName = g(1);
+  const key = Object.keys(TYPES).find(k => TYPES[k] === typeName || k === typeName);
+  const type = key || 'single_choice';
+  const diffRaw = g(2);
+  const difficulty = diffRaw.includes('简') ? 'easy' : (diffRaw.includes('困') || diffRaw.includes('难')) ? 'hard' : 'medium';
+  const imp = Math.max(1, Math.min(5, parseInt(g(4)) || 3));
+  let ans = g(10);
+  if (type === 'true_false') ans = /对|正确|√|T$/i.test(ans) ? '正确' : '错误';
+  const opts = [g(6), g(7), g(8), g(9)].map((v, k) => v ? String.fromCharCode(65 + k) + '. ' + v : '').filter(Boolean);
+  return {
+    document_id: null, subject_id: null,
+    type, difficulty, content,
+    options: opts.length ? opts : null,
+    answer: ans, explanation: g(11),
+    knowledge_point: g(3),
+    importance: imp,
+    source_excerpt: '', topic: '',
+    created_at: Date.now(),
+  };
+}
+/** 解析模板文本（HTML 表格或 TSV），弹出预览确认 */
+function qTplParseAndPreview(text) {
+  let rows;
+  if (/<table[\s>]/i.test(text)) {
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+    rows = [...doc.querySelectorAll('table tr')].map(tr => [...tr.querySelectorAll('td,th')].map(td => td.textContent || ''));
+  } else {
+    rows = qTplParseTSV(text);
+  }
+  const parsed = [];
+  let headerSkipped = false;
+  for (const cells of rows) {
+    const c0 = String(cells[0] || '').replace(/&nbsp;/gi, ' ').trim();
+    if (!headerSkipped && (c0 === '序号' || /序号/.test(c0))) { headerSkipped = true; continue; }
+    const q = qTplRowToQ(cells);
+    if (!q) continue;
+    const isExample = q.knowledge_point === '示例知识点' || /示例题干/.test(q.content);
+    parsed.push({ q, isExample });
+  }
+  if (!parsed.length) { toast('没有解析到题目：请确认导入的是出题模板格式（12 列表格）', 'err'); return; }
+  qTplParsed = parsed;
+  qTplPreviewModal();
+}
+function qTplPreviewModal() {
+  const parsed = qTplParsed;
+  const nReal = parsed.filter(p => !p.isExample).length;
+  if (!nReal) { toast('模板里只有示例行，没有可导入的题目', 'err'); return; }
+  modal(`<h3 style="margin-top:0">📥 解析结果：可导入 ${nReal} 题${parsed.length - nReal ? `（另 ${parsed.length - nReal} 行示例行自动跳过）` : ''}</h3>
+    <div style="max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <tr style="position:sticky;top:0;background:var(--bg2, #f2f2f2)">
+          <th style="padding:6px 8px;text-align:left">#</th><th style="padding:6px 8px;text-align:left">题型</th>
+          <th style="padding:6px 8px;text-align:left">题干（截断）</th><th style="padding:6px 8px;text-align:left">答案</th>
+        </tr>
+        ${parsed.map((p, i) => p.isExample ? '' : `<tr style="border-top:1px solid var(--border)">
+          <td style="padding:6px 8px">${i + 1}</td>
+          <td style="padding:6px 8px">${TYPES[p.q.type] || p.q.type}</td>
+          <td style="padding:6px 8px">${esc(p.q.content.slice(0, 40))}${p.q.content.length > 40 ? '…' : ''}</td>
+          <td style="padding:6px 8px">${esc(p.q.answer)}</td></tr>`).join('')}
+      </table>
+    </div>
+    ${subjects.length ? `<div class="f" style="margin-top:10px"><span>归入科目（可选，题目归属该科目）</span>
+      <select id="qTplSubj" style="width:100%"><option value="">不归入（未分类）</option>
+        ${subjects.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></div>` : ''}
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button class="ghost" onclick="qTplImportModal()">← 返回</button>
+      <button class="primary" id="qTplDoBtn">确认导入 ${nReal} 题</button>
+    </div>`);
+  $('#qTplDoBtn').onclick = () => qTplDoImport($('#qTplSubj') ? $('#qTplSubj').value : null);
+}
+async function qTplDoImport(sid) {
+  const parsed = (qTplParsed || []).filter(p => !p.isExample);
+  if (!parsed.length) { toast('没有可导入的题目', 'err'); return; }
+  let n = 0;
+  for (const p of parsed) {
+    const q = { ...p.q, subject_id: sid || null };
+    await DB.add('questions', q);
+    n++;
+  }
+  qTplParsed = null;
+  closeModal();
+  await refreshData();
+  go('bank');
+  toast(`已从模板导入 ${n} 道题目`, 'ok');
 }
 
 /* ============ 知识点图谱 ============ */
