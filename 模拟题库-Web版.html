@@ -302,6 +302,10 @@ tr.click:hover{background:var(--panel2);cursor:pointer}
   padding:13px 15px;display:flex;flex-direction:column;gap:8px;transition:.15s}
 .kb-note:hover{border-color:var(--primary);transform:translateY(-1px)}
 .kb-note-hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.kb-note-hd.kb-foldable{cursor:pointer;user-select:none}
+.kb-fold{font-size:12px;color:var(--muted);flex:none}
+.kb-note-sum{font-size:12.5px;color:var(--muted);line-height:1.6;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kb-note-bd{margin-top:6px}
 .kb-note-txt{font-size:13.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word;
   max-height:200px;overflow:auto}
 .kb-note-q{font-size:12px;color:var(--muted);border-left:3px solid var(--border);padding-left:9px;line-height:1.6;
@@ -642,7 +646,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.46.2';
+const APP_VER = '1.47.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -4600,12 +4604,20 @@ function kbKindChipsHTML() {
   const opts = [{ k: '', label: '全部' }].concat(Object.entries(KB_KIND).map(([k, v]) => ({ k, label: v.ico + ' ' + v.label })));
   return opts.map(o => `<button type="button" class="kb-kind ${kbFilter.kind === o.k ? 'on' : ''}" data-k="${o.k}">${o.label}</button>`).join('');
 }
-function kbNoteCard(n) {
+function kbNoteCard(n, i) {
   const meta = KB_KIND[n.kind] || KB_KIND.free;
   const graph = kbGraphNames();
   const kps = (n.kps || []).filter(Boolean);
   const pills = kps.slice(0, 2).map(k => `<span class="pill blue" style="cursor:pointer" title="${graph.has(k) ? '在图谱中定位这个知识点' : '题库里还没有这个知识点的题目，图谱暂无节点'}" onclick="goKPDetail('${esc(k)}')">🧠 ${esc(k)}</span>`).join('')
     + (kps.length > 2 ? `<span class="pill gray">+${kps.length - 2}</span>` : '');
+  /* v1.47.0：卡片默认折叠（头部 + 一行摘要），点头部或摘要展开正文；footer 操作按钮常显 */
+  const iArg = (i === undefined ? '' : i);
+  const foldHd = `onclick="kbToggleCard(${iArg})"`;
+  const foldMark = `<span class="kb-fold" id="kbfold-${iArg}" title="展开 / 收起">▸</span>`;
+  const sumTxt = n.kind === 'fav' && n.fav
+    ? clipText((n.fav.kind === 'ai' ? n.fav.ai : (n.fav.title || n.fav.q || n.fav.snippet)) || '', 70)
+    : clipText(n.text, 70);
+  const sumLine = `<div class="kb-note-sum" ${foldHd} id="kbsum-${iArg}">${esc(sumTxt || '（空）')}</div>`;
   /* v1.38.1：查询收藏卡 —— 标题可点开原文，AI 问答整段预览，可转笔记 / 取消收藏 */
   if (n.kind === 'fav' && n.fav) {
     const f = n.fav;
@@ -4613,8 +4625,11 @@ function kbNoteCard(n) {
       ? `<div class="kb-note-txt">${esc(f.ai || '（回答内容为空）')}</div>`
       : `${f.url ? `<div style="margin-bottom:6px"><a href="#" onclick="wsOpenLink(this.getAttribute('data-u'));return false" data-u="${esc(f.url)}" title="用浏览器打开原文">${esc(f.title || f.url)}</a></div>` : `<div style="margin-bottom:6px;font-weight:600">${esc(f.title || f.q || '')}</div>`}${f.snippet ? `<div class="kb-note-txt">${esc(f.snippet)}</div>` : ''}`;
     return `<div class="kb-note">
-    <div class="kb-note-hd"><span class="pill ${meta.cls}">${meta.ico} ${meta.label}</span>${pills || '<span class="pill gray">未关联知识点</span>'}${f.kind === 'ai' ? '<span class="pill gray">AI 问答</span>' : ''}<span style="flex:1"></span></div>
+    <div class="kb-note-hd kb-foldable" ${foldHd}><span class="pill ${meta.cls}">${meta.ico} ${meta.label}</span>${pills || '<span class="pill gray">未关联知识点</span>'}${f.kind === 'ai' ? '<span class="pill gray">AI 问答</span>' : ''}<span style="flex:1"></span>${foldMark}</div>
+    ${sumLine}
+    <div class="kb-note-bd" id="kbbd-${iArg}" style="display:none">
     ${head}
+    </div>
     <div class="kb-note-ft">
       <span>${fmtDate(n.at)}收藏</span><span style="flex:1"></span>
       ${f.url ? `<button class="ghost" data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)">打开原文</button>` : ''}
@@ -4625,10 +4640,13 @@ function kbNoteCard(n) {
   </div>`;
   }
   return `<div class="kb-note">
-    <div class="kb-note-hd"><span class="pill ${meta.cls}">${meta.ico} ${meta.label}</span>${pills || '<span class="pill gray">未关联知识点</span>'}<span style="flex:1"></span></div>
+    <div class="kb-note-hd kb-foldable" ${foldHd}><span class="pill ${meta.cls}">${meta.ico} ${meta.label}</span>${pills || '<span class="pill gray">未关联知识点</span>'}<span style="flex:1"></span>${foldMark}</div>
+    ${sumLine}
+    <div class="kb-note-bd" id="kbbd-${iArg}" style="display:none">
     <div class="kb-note-txt">${esc(n.text)}</div>
     ${n.kind === 'mist' ? `<div class="kb-note-q">📕 ${esc(n.content || '（原题已删除）')}</div>` : ''}
     ${n.kind === 'qn' ? `<div class="kb-note-q">✏️ ${esc(TYPES[n.qtype] || n.qtype || '题目')} · ${esc(clipText(n.content, 130) || '（原题已删除）')}</div>` : ''}
+    </div>
     <div class="kb-note-ft">
       <span>${fmtDate(n.at)}</span><span style="flex:1"></span>
       ${n.kind === 'mist' ? '<button class="ghost" onclick="go(\'mist\')">去错题本</button>' : ''}
@@ -4639,6 +4657,17 @@ function kbNoteCard(n) {
       <button class="ghost kpn-del" onclick="kbDeleteNote('${esc(n.key)}')">删除</button>
     </div>
   </div>`;
+}
+/** v1.47.0：知识库卡片折叠 / 展开（i 为列表索引） */
+function kbToggleCard(id) {
+  const bd = document.getElementById('kbbd-' + id);
+  if (!bd) return;
+  const open = bd.style.display !== 'none';
+  bd.style.display = open ? 'none' : '';
+  const sum = document.getElementById('kbsum-' + id);
+  if (sum) sum.style.display = open ? '' : 'none';
+  const fold = document.getElementById('kbfold-' + id);
+  if (fold) fold.textContent = open ? '▸' : '▾';
 }
 /** 截断长文本（题目笔记卡片只露摘要，完整内容在「看原题」里） */
 function clipText(s, n) {
@@ -4674,7 +4703,7 @@ function kbRenderList() {
   const all = kbAllNotes();
   const list = kbFilterList(all, kbFilter);
   box.innerHTML = list.length
-    ? `<div class="kb-grid">${list.map(kbNoteCard).join('')}</div>`
+    ? `<div class="kb-grid">${list.map((n, i) => kbNoteCard(n, i)).join('')}</div>`
     : `<div class="card"><div class="empty">${all.length
         ? '没有符合筛选条件的笔记<br>换个关键词，或把类型切回「全部」'
         : '还没有任何笔记或收藏<br>复习或答题练习时在题目上方写「📝 我的笔记」、图谱里选中知识点写一条、错题本记笔记、联网查询里点「⭐ 收藏」，都会自动收进知识库'}</div></div>`;

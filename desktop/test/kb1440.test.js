@@ -179,3 +179,23 @@ describe('知识库界面接入', () => {
     expect(HTML).toContain('五类内容统一检索');
   });
 });
+
+describe('v1.47.0 知识库卡片默认折叠', () => {
+  test('卡片有折叠正文区、摘要行、箭头，头部可点切换', () => {
+    expect(HTML).toContain('kb-note-bd');
+    expect(HTML).toContain('kb-note-sum');
+    expect(HTML).toContain('kb-fold');
+    expect(HTML).toContain('kb-foldable');
+    expect(HTML).toContain('onclick="kbToggleCard(');
+  });
+  test('kbToggleCard 切换正文/摘要/箭头', () => {
+    const s = HTML.indexOf('function kbToggleCard');
+    const f = HTML.slice(s, s + 600);
+    expect(f).toContain("getElementById('kbbd-' + id)");
+    expect(f).toContain("getElementById('kbsum-' + id)");
+    expect(f).toContain("'▾'");
+  });
+  test('列表渲染传入索引用作 DOM 标识', () => {
+    expect(HTML).toContain('list.map((n, i) => kbNoteCard(n, i))');
+  });
+});
