@@ -646,7 +646,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.47.0';
+const APP_VER = '1.48.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -2419,6 +2419,7 @@ async function viewDocs() {
     </div>` : ''}
     <div style="margin-top:14px">
       <button class="ghost" id="pasteBtn">📋 粘贴文本创建文档</button>
+      <button class="ghost" onclick="qTplExport()">📤 导出出题模板</button>
       <div id="pasteBox" class="hidden" style="margin-top:10px">
         <input id="pasteTitle" placeholder="文档标题（可选）" style="margin-bottom:8px">
         <textarea id="pasteText" rows="6" placeholder="把学习资料、笔记、章节内容粘贴到这里…"></textarea>
@@ -2967,6 +2968,95 @@ function downloadBlob(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* ---------- 出题模板导出（题目批量录入模板） ---------- */
+let qTplTypes = null;   // Set(题型key)；null=尚未初始化（默认全选）
+function qTplExport(rows) {
+  const types = Object.keys(TYPES);
+  if (!qTplTypes) qTplTypes = new Set(types);
+  const keepRows = rows != null ? rows : ($('#qTplRows') ? +$('#qTplRows').value : 20);
+  modal(`<h3 style="margin-top:0">📤 导出出题模板</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:-6px">导出空白录入表格（Word），批量填好后可作题目录入底稿</p>
+    <div class="f"><span>包含题型（点芯片切换，默认全部）</span>
+      <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:6px">
+        ${types.map(t => `<button class="sm ${qTplTypes.has(t) ? 'primary' : 'ghost'}" onclick="qTplChip('${t}')">${TYPES[t]}${qTplTypes.has(t) ? ' ✓' : ''}</button>`).join('')}
+      </div>
+    </div>
+    <div class="f" style="margin-top:10px"><span>预填空行数</span>
+      <input id="qTplRows" type="number" min="1" max="500" value="${Math.max(1, Math.min(500, keepRows || 20))}" style="width:120px">
+      <span style="font-size:12px;color:var(--muted)">示例行之外每题型额外附 1 行格式示例</span>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button class="ghost" onclick="closeModal()">取消</button>
+      <button class="primary" onclick="exportQTemplate()">导出 Word 模板</button>
+    </div>`);
+}
+function qTplChip(t) {
+  if (qTplTypes.has(t)) qTplTypes.delete(t); else qTplTypes.add(t);
+  if (!qTplTypes.size) qTplTypes.add(t);   // 至少保留一个题型
+  qTplExport();
+}
+/** 各题型示例行（浅黄底，格式参考用） */
+function qTplExampleRows(types) {
+  const exAll = {
+    single_choice: { type: '单选题', diff: '简单', kp: '示例知识点', imp: 3, content: '空气中含量最多的气体是？', opts: ['氧', '氮', '碳', '氢'], ans: 'B', exp: '空气中氮气约占 78%' },
+    multiple_choice: { type: '多选题', diff: '中等', kp: '示例知识点', imp: 4, content: '下列属于可再生能源的是？', opts: ['太阳能', '风能', '煤炭', '水能'], ans: 'ABD', exp: '煤炭是不可再生能源' },
+    true_false: { type: '判断题', diff: '简单', kp: '示例知识点', imp: 2, content: '空气中氧气含量高于氮气。', opts: [], ans: '错', exp: '氮气约 78%，氧气约 21%' },
+    fill_blank: { type: '填空题', diff: '中等', kp: '示例知识点', imp: 3, content: '水的化学式是____。', opts: [], ans: 'H₂O', exp: '两个氢原子、一个氧原子' },
+    short_answer: { type: '简答题', diff: '困难', kp: '示例知识点', imp: 5, content: '简述光合作用的意义。', opts: [], ans: '（此处填写参考答案文字）', exp: '把光能转化为化学能，维持大气氧气含量' },
+  };
+  return types.map(t => {
+    if (exAll[t]) return exAll[t];
+    const c = customTypes.find(x => x.key === t);
+    return {
+      type: c ? c.name : t, diff: '中等', kp: '示例知识点', imp: 3,
+      content: '（自定义题型示例题干）',
+      opts: c && c.input === 'choice' ? ['选项一', '选项二', '选项三', '选项四'] : [],
+      ans: c && c.input === 'choice' ? 'A' : '（参考答案）', exp: '（解析）',
+    };
+  });
+}
+function exportQTemplate() {
+  const rows = Math.max(1, Math.min(500, +($('#qTplRows') ? $('#qTplRows').value : 20) || 20));
+  const types = qTplTypes && qTplTypes.size ? [...qTplTypes] : Object.keys(TYPES);
+  const exRows = qTplExampleRows(types);
+  const th = 'border:1px solid #999;padding:4px 6px;background:#f0f0f0;font-weight:bold;text-align:center';
+  const td = 'border:1px solid #999;padding:4px 6px;vertical-align:top';
+  const tdC = td + ';text-align:center';
+  const tdEx = td + ';background:#FAEEDA';
+  const tdExC = tdC + ';background:#FAEEDA';
+  const head = ['序号', '题型', '难度', '知识点', '重要程度', '题干', '选项A', '选项B', '选项C', '选项D', '答案', '解析'];
+  let body = `<tr>${head.map(h => `<td style="${th}">${h}</td>`).join('')}</tr>`;
+  exRows.forEach((r, i) => {
+    body += `<tr><td style="${tdExC}">${i + 1}</td>`
+      + `<td style="${tdEx}">${r.type}</td><td style="${tdEx}">${r.diff}</td>`
+      + `<td style="${tdEx}">${r.kp}</td><td style="${tdExC}">${r.imp}</td>`
+      + `<td style="${tdEx}">${esc(r.content)}</td>`
+      + [0, 1, 2, 3].map(k => `<td style="${tdEx}">${esc(r.opts[k] || '')}</td>`).join('')
+      + `<td style="${tdExC}">${esc(r.ans)}</td><td style="${tdEx}">${esc(r.exp)}</td></tr>`;
+  });
+  for (let i = 0; i < rows; i++) {
+    body += `<tr><td style="${tdC}">${exRows.length + i + 1}</td>`
+      + Array(11).fill(0).map(() => `<td style="${td}">&nbsp;</td>`).join('') + '</tr>';
+  }
+  const typeNames = types.map(t => TYPES[t]).join(' / ');
+  const html = `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>出题模板</title></head><body>
+    <h2 style="text-align:center">模拟题库 · 题目批量录入模板</h2>
+    <p style="font-size:12px;color:#555;line-height:1.8">
+      <b>填写说明：</b><br>
+      ① <b>题型</b>填：${typeNames}；<b>难度</b>填：简单 / 中等 / 困难（留空按「中等」处理）。<br>
+      ② <b>重要程度</b>填 1~5：1 了解 · 2 一般 · 3 较重要 · 4 重要 · 5 核心（留空按 3 处理）。<br>
+      ③ <b>答案</b>：单选题填字母（如 B）；多选题连填（如 ABD）；判断题填「对 / 错」；填空、简答题直接填文字答案。<br>
+      ④ <b>选项列</b>：判断题、填空题、简答题留空即可；单选 / 多选题按 A~D 顺序填写（不足四项留空）。<br>
+      ⑤ <b>知识点</b>填该题归属的知识点名称，可留空；<b>解析</b>建议填写，便于复习。
+    </p>
+    <table style="border-collapse:collapse;width:100%;font-size:12px">${body}</table>
+    <p style="font-size:12px;color:#888">浅黄底行为格式示例，正式使用时可覆盖或删除；「&nbsp;」占位空单元格可正常填写。</p>
+  </body></html>`;
+  closeModal();
+  const fname = '出题模板_' + new Date().toISOString().slice(0, 10) + '.doc';
+  saveAs(fname, html, 'doc', 'Word 文档');
 }
 
 /* ============ 知识点图谱 ============ */
@@ -8062,6 +8152,7 @@ async function viewSet() {
   </div>` : ''}
   <div class="card"><h3>💾 数据管理</h3>
     <div class="row">
+      <button class="ghost" onclick="qTplExport()">📤 导出出题模板</button>
       <button class="ghost" id="sBackup">${IS_DESKTOP ? '导出当前题库（JSON 备份）' : '导出全部数据（JSON 备份）'}</button>
       <button class="ghost" id="sRestore">导入备份</button>
       <button class="danger" id="sReset">${IS_DESKTOP ? '清空当前题库数据' : '清空全部数据'}</button>
