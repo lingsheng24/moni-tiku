@@ -1,4 +1,4 @@
-/* 生成出题模板示例文件（与 exportQTemplate 同构逻辑）——给军哥预览格式用 */
+/* 生成出题模板 Excel 版示例文件（与 exportQTemplate xls 分支同构）——给军哥预览格式用 */
 const fs = require('fs');
 const path = require('path');
 const TYPES = { single_choice: '单选题', multiple_choice: '多选题', true_false: '判断题', fill_blank: '填空题', short_answer: '简答题' };
@@ -31,7 +31,12 @@ for (let i = 0; i < rows; i++) {
     + Array(11).fill(0).map(() => `<td style="${td}">&nbsp;</td>`).join('') + '</tr>';
 }
 const typeNames = types.map(t => TYPES[t]).join(' / ');
-const html = `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>出题模板</title></head><body>
+const headXml = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><title>出题模板</title>
+      <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+        <x:Name>题目模板</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+      </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+    </head><body>`;
+const html = headXml + `
     <h2 style="text-align:center">模拟题库 · 题目批量录入模板</h2>
     <p style="font-size:12px;color:#555;line-height:1.8">
       <b>填写说明：</b><br>
@@ -45,6 +50,6 @@ const html = `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta 
     <p style="font-size:12px;color:#888">浅黄底行为格式示例，正式使用时可覆盖或删除；「&nbsp;」占位空单元格可正常填写。</p>
   </body></html>`;
 const dir = path.join(__dirname, '..');
-fs.writeFileSync(path.join(dir, '出题模板_预览.doc'), '\ufeff' + html);
-fs.writeFileSync(path.join(dir, '出题模板_预览.html'), html.replace('<html xmlns:w="urn:schemas-microsoft-com:office:word">', '<html><body style="font-family:sans-serif;max-width:1000px;margin:20px auto">'));
-console.log('已生成：出题模板_预览.doc / 出题模板_预览.html');
+fs.writeFileSync(path.join(dir, '出题模板_预览.xls'), '\ufeff' + html);
+fs.writeFileSync(path.join(dir, '出题模板_预览_excel.html'), html.replace(/<html[^>]*>/, '<html><body style="font-family:sans-serif;max-width:1000px;margin:20px auto">').replace('<![endif]-->', ''));
+console.log('已生成：出题模板_预览.xls / 出题模板_预览_excel.html');

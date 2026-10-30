@@ -646,7 +646,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.48.0';
+const APP_VER = '1.48.1';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -1496,7 +1496,7 @@ async function saveAs(name, content, ext, desc) {
     if (p) toast('已保存：' + p, 'ok');
     return;
   }
-  downloadBlob(new Blob(['\ufeff' + content], { type: { doc: 'application/msword', json: 'application/json' }[ext] || 'text/plain' }), name);
+  downloadBlob(new Blob(['\ufeff' + content], { type: { doc: 'application/msword', xls: 'application/vnd.ms-excel', json: 'application/json' }[ext] || 'text/plain' }), name);
 }
 
 /* ---------- AI 生成题目 ---------- */
@@ -2972,24 +2972,33 @@ function downloadBlob(blob, name) {
 
 /* ---------- 出题模板导出（题目批量录入模板） ---------- */
 let qTplTypes = null;   // Set(题型key)；null=尚未初始化（默认全选）
-function qTplExport(rows) {
+function qTplExport(rows, fmt) {
   const types = Object.keys(TYPES);
   if (!qTplTypes) qTplTypes = new Set(types);
   const keepRows = rows != null ? rows : ($('#qTplRows') ? +$('#qTplRows').value : 20);
+  const keepFmt = fmt || ($('#qTplFmt') ? $('#qTplFmt').value : 'doc');
   modal(`<h3 style="margin-top:0">📤 导出出题模板</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:-6px">导出空白录入表格（Word），批量填好后可作题目录入底稿</p>
+    <p style="font-size:12px;color:var(--muted);margin-top:-6px">导出空白录入表格，批量填好后可作题目录入底稿</p>
     <div class="f"><span>包含题型（点芯片切换，默认全部）</span>
       <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:6px">
         ${types.map(t => `<button class="sm ${qTplTypes.has(t) ? 'primary' : 'ghost'}" onclick="qTplChip('${t}')">${TYPES[t]}${qTplTypes.has(t) ? ' ✓' : ''}</button>`).join('')}
       </div>
     </div>
-    <div class="f" style="margin-top:10px"><span>预填空行数</span>
-      <input id="qTplRows" type="number" min="1" max="500" value="${Math.max(1, Math.min(500, keepRows || 20))}" style="width:120px">
-      <span style="font-size:12px;color:var(--muted)">示例行之外每题型额外附 1 行格式示例</span>
+    <div class="row" style="margin-top:10px;align-items:flex-end">
+      <div class="f" style="margin:0"><span>预填空行数</span>
+        <input id="qTplRows" type="number" min="1" max="500" value="${Math.max(1, Math.min(500, keepRows || 20))}" style="width:120px">
+      </div>
+      <div class="f" style="margin:0"><span>导出格式</span>
+        <select id="qTplFmt" style="min-width:150px">
+          <option value="doc" ${keepFmt === 'doc' ? 'selected' : ''}>Word 文档（.doc）</option>
+          <option value="xls" ${keepFmt === 'xls' ? 'selected' : ''}>Excel 表格（.xls）</option>
+        </select>
+      </div>
     </div>
+    <p style="font-size:12px;color:var(--muted);margin:8px 0 0">示例行之外每题型额外附 1 行格式示例；Excel 版用 WPS / MS Excel 打开即可填写</p>
     <div class="row" style="justify-content:flex-end;margin-top:14px">
       <button class="ghost" onclick="closeModal()">取消</button>
-      <button class="primary" onclick="exportQTemplate()">导出 Word 模板</button>
+      <button class="primary" onclick="exportQTemplate()">导出模板</button>
     </div>`);
 }
 function qTplChip(t) {
@@ -3019,6 +3028,7 @@ function qTplExampleRows(types) {
 }
 function exportQTemplate() {
   const rows = Math.max(1, Math.min(500, +($('#qTplRows') ? $('#qTplRows').value : 20) || 20));
+  const fmt = $('#qTplFmt') ? $('#qTplFmt').value : 'doc';
   const types = qTplTypes && qTplTypes.size ? [...qTplTypes] : Object.keys(TYPES);
   const exRows = qTplExampleRows(types);
   const th = 'border:1px solid #999;padding:4px 6px;background:#f0f0f0;font-weight:bold;text-align:center';
@@ -3041,7 +3051,15 @@ function exportQTemplate() {
       + Array(11).fill(0).map(() => `<td style="${td}">&nbsp;</td>`).join('') + '</tr>';
   }
   const typeNames = types.map(t => TYPES[t]).join(' / ');
-  const html = `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>出题模板</title></head><body>
+  /* Excel 版：加 mso 工作表声明，Excel/WPS 打开按表格解析；Word 版沿用 office:word 命名空间 */
+  const headXml = fmt === 'xls'
+    ? `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><title>出题模板</title>
+      <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+        <x:Name>题目模板</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+      </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+    </head><body>`
+    : `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>出题模板</title></head><body>`;
+  const html = headXml + `
     <h2 style="text-align:center">模拟题库 · 题目批量录入模板</h2>
     <p style="font-size:12px;color:#555;line-height:1.8">
       <b>填写说明：</b><br>
@@ -3055,8 +3073,14 @@ function exportQTemplate() {
     <p style="font-size:12px;color:#888">浅黄底行为格式示例，正式使用时可覆盖或删除；「&nbsp;」占位空单元格可正常填写。</p>
   </body></html>`;
   closeModal();
-  const fname = '出题模板_' + new Date().toISOString().slice(0, 10) + '.doc';
-  saveAs(fname, html, 'doc', 'Word 文档');
+  const date = new Date().toISOString().slice(0, 10);
+  if (fmt === 'xls') {
+    const fname = '出题模板_' + date + '.xls';
+    saveAs(fname, html, 'xls', 'Excel 表格');
+  } else {
+    const fname = '出题模板_' + date + '.doc';
+    saveAs(fname, html, 'doc', 'Word 文档');
+  }
 }
 
 /* ============ 知识点图谱 ============ */
