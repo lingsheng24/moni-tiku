@@ -682,7 +682,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.49.0';
+const APP_VER = '1.49.1';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -1440,18 +1440,21 @@ async function parseFile(file) {
  *  resolve(sid)：确认 → 科目 id 或 null（未分类）；resolve(undefined)：取消导入。
  *  无科目时直接返回 null（不打扰）。记住上次选择作为默认值。 */
 let lastImportSubject = '';
-function pickSubjectModal(fileNames) {
+/** 选择科目弹窗：resolve(科目id | null=未分类)；取消 resolve(undefined)。
+ *  opt 可覆盖标题/说明/确认按钮文案（批量归类等场景复用同一个弹窗） */
+function pickSubjectModal(fileNames, opt = {}) {
   if (!subjects.length) return Promise.resolve(null);
   return new Promise(resolve => {
     const opts = [`<option value="">不归入（未分类）</option>`,
       ...subjects.map(s => `<option value="${esc(s.id)}" ${lastImportSubject === s.id ? 'selected' : ''}>${esc(s.name)}</option>`)].join('');
-    modal(`<h3 style="margin-bottom:10px">📚 归入科目</h3>
-      ${fileNames && fileNames.length ? `<div style="color:var(--muted);font-size:12px;margin-bottom:12px">待导入：${fileNames.map(esc).join('、')}</div>` : ''}
-      <div class="f"><span class="f-lbl">选择本次导入文档的科目（生成的题目自动归属该科目）</span>
+    modal(`<h3 style="margin-bottom:10px">${opt.title || '📚 归入科目'}</h3>
+      ${opt.hint ? `<div style="color:var(--muted);font-size:12px;margin-bottom:12px;line-height:1.7">${opt.hint}</div>`
+        : fileNames && fileNames.length ? `<div style="color:var(--muted);font-size:12px;margin-bottom:12px">待导入：${fileNames.map(esc).join('、')}</div>` : ''}
+      <div class="f"><span class="f-lbl">${opt.label || '选择本次导入文档的科目（生成的题目自动归属该科目）'}</span>
         <select id="pkSubj" style="width:100%">${opts}</select></div>
       <div class="row" style="justify-content:flex-end;margin-top:16px">
         <button class="ghost" id="pkCancel">取消</button>
-        <button class="primary" id="pkOk">开始导入</button>
+        <button class="primary" id="pkOk">${opt.okText || '开始导入'}</button>
       </div>`);
     $('#pkCancel').onclick = () => { closeModal(); resolve(undefined); };
     $('#pkOk').onclick = () => {
@@ -2439,6 +2442,40 @@ async function setDocSubject(docId, sid) {
   if (curView === 'docs') viewDocs();
   toast(sid ? `已归入「${subjNameOf(sid)}」` : '已移出科目', 'ok');
 }
+/* v1.49.1：文档批量管理——勾选集合（重绘后保留，删除时会自动剔除失效 id） */
+let docSel = new Set();
+/** 绑定文档列表的勾选框、全选与批量操作按钮（每次重绘后调用） */
+function bindDocBulk() {
+  const bar = $('#docBulkBar');
+  if (!bar) return;
+  const cbs = [...document.querySelectorAll('.doc-cb')];
+  const sync = () => {
+    const alive = new Set(state.docs.map(d => d.id));
+    [...docSel].forEach(id => { if (!alive.has(id)) docSel.delete(id); });
+    const n = docSel.size;
+    const nEl = $('#docBulkN'); if (nEl) nEl.textContent = `已选 ${n} 篇`;
+    ['docBulkGen', 'docBulkSubj', 'docBulkDel'].forEach(k => { const b = $('#' + k); if (b) b.disabled = !n; });
+    const all = $('#docAll');
+    if (all) { all.checked = n > 0 && n === state.docs.length; all.indeterminate = n > 0 && n < state.docs.length; }
+  };
+  cbs.forEach(cb => {
+    cb.onchange = () => {
+      const id = +cb.dataset.id;
+      if (cb.checked) docSel.add(id); else docSel.delete(id);
+      sync();
+    };
+  });
+  const all = $('#docAll');
+  if (all) all.onchange = () => {
+    docSel = all.checked ? new Set(state.docs.map(d => d.id)) : new Set();
+    cbs.forEach(cb => { cb.checked = all.checked; });
+    sync();
+  };
+  $('#docBulkGen').onclick = docBulkGen;
+  $('#docBulkSubj').onclick = docBulkSubj;
+  $('#docBulkDel').onclick = docBulkDel;
+  sync();
+}
 async function viewDocs() {
   $('#view').innerHTML = `
   <h1>文档管理</h1><div class="sub">导入学习资料，作为 AI 出题的素材来源${IS_DESKTOP ? '　<span class="pill green">桌面版 · 本地解析 PDF/DOCX</span>' : ''}</div>
@@ -2468,10 +2505,21 @@ async function viewDocs() {
     </div>
   </div>
   <div class="card"><h3>📄 已导入文档（${state.docs.length}）</h3>
-    ${state.docs.length ? `<table><tr><th>标题</th><th>科目</th><th>类型</th><th>大小</th><th>题数</th><th>导入时间</th><th></th></tr>
+    ${state.docs.length ? `
+    <div class="row" id="docBulkBar" style="gap:10px;margin-bottom:10px;flex-wrap:wrap">
+      <label class="row" style="gap:6px;font-size:12px;color:var(--muted);cursor:pointer;margin:0">
+        <input type="checkbox" id="docAll" style="width:auto;margin:0"> 全选</label>
+      <span id="docBulkN" style="font-size:12px;color:var(--muted)">已选 0 篇</span>
+      <span style="flex:1"></span>
+      <button class="ibtn sm" id="docBulkGen" data-tip="批量出题（按勾选顺序逐篇带入 AI 出题页）" disabled>✨</button>
+      <button class="ibtn sm" id="docBulkSubj" data-tip="批量归入科目（题目同步跟随）" disabled>📁</button>
+      <button class="ibtn sm danger" id="docBulkDel" data-tip="批量删除文档（已生成题目保留）" disabled>🗑</button>
+    </div>
+    <table><tr><th style="width:30px"></th><th>标题</th><th>科目</th><th>类型</th><th>大小</th><th>题数</th><th>导入时间</th><th></th></tr>
       ${state.docs.map(d => {
         const qn = state.questions.filter(q => q.document_id === d.id).length;
-        return `<tr><td><b>${esc(d.title)}</b></td>
+        return `<tr><td><input type="checkbox" class="doc-cb" data-id="${d.id}" style="width:auto;margin:0" ${docSel.has(d.id) ? 'checked' : ''}></td>
+        <td><b>${esc(d.title)}</b></td>
         <td>${subjects.length ? `<select class="doc-subj" data-id="${d.id}" style="width:auto;min-width:118px;padding:4px 8px;font-size:12px">
             <option value="">未分类</option>
             ${subjects.map(s => `<option value="${esc(s.id)}" ${d.subject_id === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
@@ -2484,6 +2532,7 @@ async function viewDocs() {
       }).join('')}</table>` : '<div class="empty">还没有导入文档</div>'}
   </div>`;
   bindSubjectManager();
+  bindDocBulk();
   document.querySelectorAll('.doc-subj').forEach(sel => {
     sel.onchange = () => setDocSubject(sel.dataset.id, sel.value);
   });
@@ -2533,6 +2582,50 @@ async function delDoc(id) {
   if (!confirm('删除该文档不会删除已生成的题目，确认删除？')) return;
   await DB.del('docs', id); await refreshData(); viewDocs(); toast('已删除', 'ok');
 }
+/* ---------- v1.49.1 文档批量操作：批量出题 / 批量归科目 / 批量删除 ---------- */
+/** 当前勾选且仍存在的文档 id（顺序与列表一致） */
+function docBulkIds() {
+  const alive = new Set(state.docs.map(d => d.id));
+  return state.docs.filter(d => docSel.has(d.id) && alive.has(d.id)).map(d => d.id);
+}
+/** 批量出题：勾选的文档排成队列带到 AI 出题页，逐篇切换生成 */
+function docBulkGen() {
+  const ids = docBulkIds();
+  if (!ids.length) { toast('请先勾选文档', 'err'); return; }
+  sessionStorage.setItem('gen_queue', JSON.stringify(ids));
+  go('gen');
+}
+/** 批量归入科目：文档与其已生成题目一起改科目（与单篇规则一致） */
+async function docBulkSubj() {
+  const ids = docBulkIds();
+  if (!ids.length) { toast('请先勾选文档', 'err'); return; }
+  if (!subjects.length) { toast('还没有科目，先在「📚 科目管理」新建一个', 'err'); return; }
+  const sid = await pickSubjectModal(null, {
+    title: `📚 批量归入科目（${ids.length} 篇）`,
+    hint: `选中的 ${ids.length} 篇文档及其已生成的题目会一起改到同一科目。`,
+    label: '目标科目',
+    okText: '确认归类',
+  });
+  if (sid === undefined) return;
+  for (const id of ids) {
+    const d = await DB.get('docs', +id);
+    if (d) { d.subject_id = sid || null; await DB.put('docs', d); }
+    for (const q of state.questions) if (+q.document_id === +id) { q.subject_id = sid || null; await DB.put('questions', q); }
+  }
+  await refreshData();
+  toast(sid ? `已把 ${ids.length} 篇文档归入「${subjNameOf(sid)}」` : `已把 ${ids.length} 篇文档移出科目`, 'ok');
+  viewDocs();
+}
+/** 批量删除文档（题目保留，与单篇删除规则一致） */
+async function docBulkDel() {
+  const ids = docBulkIds();
+  if (!ids.length) { toast('请先勾选文档', 'err'); return; }
+  const qn = state.questions.filter(q => ids.includes(+q.document_id)).length;
+  if (!confirm(`确认删除选中的 ${ids.length} 篇文档？${qn ? `\n\n其下 ${qn} 道题目会保留在题库，只是来源文档变为空。` : ''}`)) return;
+  for (const id of ids) { await DB.del('docs', +id); docSel.delete(id); }
+  await refreshData(); viewDocs();
+  toast(`已删除 ${ids.length} 篇文档`, 'ok');
+}
 /* ---------- 题目详情 ---------- */
 function viewQuestion(id) {
   const q = state.questions.find(x => x.id === id);
@@ -2569,9 +2662,18 @@ async function showDoc(id) {
 
 /* ============ AI 生成题目 ============ */
 let genTypes = new Set(['single_choice', 'true_false', 'fill_blank']);
+/* v1.49.1：文档批量出题的待办队列（文档管理页勾选多篇后带过来） */
+let genQueue = [];
 async function viewGen() {
-  const pre = sessionStorage.getItem('gen_doc'); sessionStorage.removeItem('gen_doc');
+  let pre = sessionStorage.getItem('gen_doc'); sessionStorage.removeItem('gen_doc');
+  /* 批量出题：读取队列，按顺序切文档（队列里已删除的文档自动剔除） */
+  let q = [];
+  try { q = JSON.parse(sessionStorage.getItem('gen_queue') || '[]'); } catch (e) { q = []; }
+  sessionStorage.removeItem('gen_queue');
+  genQueue = Array.isArray(q) ? q.map(String).filter(id => state.docs.some(d => String(d.id) === id)) : [];
+  if (!pre && genQueue.length) pre = genQueue[0];
   if (!state.docs.length) {
+    genQueue = [];
     $('#view').innerHTML = `<h1>AI 生成题目</h1><div class="sub">先导入文档，才能基于内容出题</div>
       <div class="card"><div class="empty">暂无文档 <button class="primary" onclick="go('docs')">去导入</button></div></div>`;
     return;
@@ -2579,6 +2681,13 @@ async function viewGen() {
   $('#view').innerHTML = `
   <h1>AI 生成题目</h1><div class="sub">基于文档内容由 AI 生成高质量题目，存入题库</div>
   <div class="card"><h3>⚙️ 出题设置</h3>
+    ${genQueue.length > 1 ? `<div class="row" id="genQueueBar" style="gap:10px;margin-bottom:12px;padding:8px 10px;background:var(--primary-soft);border-radius:8px;flex-wrap:wrap">
+      <span class="pill blue" id="genQueueTxt">批量队列：共 ${genQueue.length} 篇</span>
+      <span style="font-size:12px;color:var(--muted)">生成完一篇点「下一篇」继续，队列用完自动结束</span>
+      <span style="flex:1"></span>
+      <button class="ibtn sm" id="genQueueNext" data-tip="切到队列里的下一篇文档">→</button>
+      <button class="ibtn sm" id="genQueueClear" data-tip="结束批量队列">✕</button>
+    </div>` : ''}
     <div class="grid c2">
       <label class="f"><span>选择文档</span>
         <select id="gDoc">${state.docs.map(d => `<option value="${d.id}" ${String(pre) === String(d.id) ? 'selected' : ''}>${esc(d.title)}</option>`).join('')}</select></label>
@@ -2625,6 +2734,33 @@ async function viewGen() {
   $('#gLocal').onclick = runLocalGen;
   syncGenTypesFromDoc(true);   // 初始按预选文档同步题型勾选（静默）
   $('#gDoc').onchange = () => syncGenTypesFromDoc(null);
+  /* v1.49.1：批量队列条——显示当前第几篇，可切下一篇 / 结束队列 */
+  const qBar = $('#genQueueBar');
+  if (qBar) {
+    const qTxt = $('#genQueueTxt');
+    const updQ = () => {
+      const i = genQueue.indexOf(String($('#gDoc').value));
+      qTxt.textContent = `批量队列：共 ${genQueue.length} 篇，当前第 ${i < 0 ? 1 : i + 1} 篇`;
+      const nx = $('#genQueueNext');
+      if (nx) {
+        const last = i < 0 || i >= genQueue.length - 1;
+        nx.disabled = last;
+        nx.dataset.tip = last ? '已经是队列最后一篇' : '切到队列里的下一篇文档';
+      }
+    };
+    updQ();
+    $('#gDoc').addEventListener('change', updQ);
+    $('#genQueueNext').onclick = () => {
+      const i = genQueue.indexOf(String($('#gDoc').value));
+      const nx = genQueue[i + 1];
+      if (!nx) { toast('已经是队列最后一篇了', 'ok'); return; }
+      $('#gDoc').value = nx;
+      syncGenTypesFromDoc(null);
+      updQ();
+      toast('已切换到下一篇文档', 'ok');
+    };
+    $('#genQueueClear').onclick = () => { genQueue = []; qBar.remove(); toast('已结束批量队列', 'ok'); };
+  }
   initGenCount();
   if (genSession.length) renderQPreview(genSession, $('#gResult'));
 }
@@ -3272,6 +3408,12 @@ async function qTplDoImport(sid) {
   await refreshData();
   go('bank');
   toast(`已从模板导入 ${n} 道题目`, 'ok');
+}
+
+/* 知识点图谱图标：与左侧导航栏「知识点图谱」同一套 SVG，各处按钮复用它保持视觉一致。
+ * size 为边长（px），颜色跟随 currentColor。 */
+function kpIconSVG(size = 16) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" style="display:block;margin:0 auto"><g stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"><line x1="12" y1="12" x2="12" y2="4.9"/><line x1="12" y1="12" x2="18.9" y2="16.9"/><line x1="12" y1="12" x2="5.1" y2="16.9"/><line x1="12" y1="4.9" x2="18.9" y2="16.9" stroke-dasharray="2 2.6" opacity=".5"/></g><circle cx="12" cy="4.9" r="2.1" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18.9" cy="16.9" r="2.1" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="5.1" cy="16.9" r="2.1" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>`;
 }
 
 /* ============ 知识点图谱 ============ */
@@ -4127,16 +4269,16 @@ function kpDraw() {
       const cut = 8;
       const label = full.length > cut ? full.slice(0, cut) + '…' : full;
       const fs = Math.max(10, Math.min(15, 11.5 * p.s));
-      /* v1.49.0：4 星起把星数标在节点上沿（紧贴边缘、彼此挨着），替代原来的彩色外环 */
+      /* v1.49.1：4 星起把星数环绕节点均匀分布，替代原来的彩色外环 */
       const hasStar = imp >= 4;
       const sfs = Math.max(6.5, Math.min(10, 7.6 * p.s));         // 星标字号随景深
-      const starRing = r + sfs * 0.42;                            // 星心所在圆周半径（紧贴节点边缘）
-      const starStep = (sfs * 0.90) / starRing;                   // 单颗星占的圆心角：星挨星不留空
-      const starA0 = -Math.PI / 2 - (imp - 1) * starStep / 2;     // 整串以正上方居中
+      const starRing = r + sfs * 0.46;                            // 星心所在圆周半径（紧贴节点边缘）
+      const starStep = (Math.PI * 2) / Math.max(1, imp);          // 整圈等分：几颗星就把圆周分成几份
+      const starA0 = -Math.PI / 2;                                // 第一颗从正上方起，顺时针分布
       ctx.font = `${isSel || isHover ? 700 : 500} ${fs.toFixed(1)}px system-ui,"Microsoft YaHei",sans-serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       const tw = ctx.measureText(label).width, tx = p.sx;
-      const ty = p.sy + r + 4;
+      const ty = p.sy + r + 4 + (hasStar ? sfs * 0.62 : 0);   // 有星环绕时标签下移，避开下沿的星
       if (isSel || isHover) {                                 // 白底提升可读性
         ctx.fillStyle = kpAlpha('#ffffff', 0.88);
         ctx.fillRect(tx - tw / 2 - 4, ty - 1, tw + 8, fs + 5);
@@ -4145,14 +4287,14 @@ function kpDraw() {
       ctx.globalAlpha = (isSel || isHover) ? 1 : 0.30 + 0.70 * ((p.z + 1) / 2);
       ctx.fillText(label, tx, ty);
       ctx.globalAlpha = 1;
-      /* v1.49.0：星数沿节点上沿紧挨着排成一串，星尖朝外；星数 = 重要程度 */
+      /* v1.49.1：星数环绕节点均匀分布（整圈等分），星尖朝外；星数 = 重要程度 */
       if (hasStar) {
         ctx.font = `700 ${sfs.toFixed(1)}px system-ui,"Microsoft YaHei",sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = IMP_COLOR[imp];
         ctx.globalAlpha = (isSel || isHover) ? 1 : 0.45 + 0.55 * ((p.z + 1) / 2);
         for (let k = 0; k < imp; k++) {
-          const a = starA0 + k * starStep;                        // 相邻星紧挨，不留均匀间隔
+          const a = starA0 + k * starStep;                        // 等角间隔，均匀铺满圆周
           ctx.save();
           ctx.translate(p.sx + Math.cos(a) * starRing, p.sy + Math.sin(a) * starRing);
           ctx.rotate(a + Math.PI / 2);                            // 星尖指向外侧
@@ -5062,7 +5204,7 @@ function viewKB() {
       </select>` : ''}
       <button class="primary" onclick="kbNewNote()">＋ 新建笔记</button>
       <button class="ibtn" data-tip="联网查询不懂的知识点，结果可存成笔记" onclick="wsOpen()">🔍</button>
-      <button class="ibtn" data-tip="打开知识点图谱" onclick="go('kp')">🧠</button>
+      <button class="ibtn" data-tip="打开知识点图谱" onclick="go('kp')">${kpIconSVG(15)}</button>
     </div>
     <div class="row"><span class="kb-kinds" id="kbKindBox">${kbKindChipsHTML()}</span>
       <span style="flex:1"></span><span id="kbCount" style="color:var(--muted);font-size:12px">当前显示 ${all.length} / ${all.length} 条</span></div>
@@ -5071,7 +5213,7 @@ function viewKB() {
     <h3>🧠 笔记与图谱联动 <span class="pill blue" style="font-weight:600">覆盖 ${s.covered} / ${s.graphTotal} 个知识点</span>
       <span style="flex:1"></span>
       <button class="ibtn sm on" data-tip="只看有笔记的知识点" onclick="kbOpenGraph()">📝</button>
-      <button class="ibtn sm" data-tip="打开完整图谱" onclick="go('kp')">🧠</button></h3>
+      <button class="ibtn sm" data-tip="打开完整图谱" onclick="go('kp')">${kpIconSVG(13)}</button></h3>
     <div class="kb-cover"><i style="width:${pct}%"></i></div>
     <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:12px">
       ${topKP.length ? topKP.map(([k, n]) => `<span class="pill amber" style="cursor:pointer" title="在图谱中定位" onclick="goKPDetail('${esc(k)}')">${esc(k)} · ${n} 条</span>`).join('')

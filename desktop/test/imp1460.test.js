@@ -99,17 +99,20 @@ describe('图谱节点显示重要程度', () => {
     const pick = between('kpPick', 'function kpTick');
     expect(pick).toContain('(0.85 + ((p.n.imp || 3) - 3) * 0.12)');
   });
-  test('v1.49.0：≥4 星节点上沿紧挨着排一串星（星尖朝外），不再画彩色外环', () => {
+  test('v1.49.1：≥4 星节点的星环绕节点均匀分布（星尖朝外），不再画彩色外环', () => {
     const draw = between('kpDraw', '/** 命中检测');
     expect(draw).toContain('const hasStar = imp >= 4');
-    expect(draw).toContain('const starRing = r + sfs * 0.42');
-    // 星挨星沿上弧排布（不再按 360/imp 平均绕圈），并旋转使星尖朝外
-    expect(draw).toContain('const starStep = (sfs * 0.90) / starRing');
-    expect(draw).toContain('const starA0 = -Math.PI / 2 - (imp - 1) * starStep / 2');
+    expect(draw).toContain('const starRing = r + sfs * 0.46');
+    // 整圈等分：几颗星就把 360° 分成几份，均匀铺满节点周围
+    expect(draw).toContain('const starStep = (Math.PI * 2) / Math.max(1, imp)');
+    expect(draw).toContain('const starA0 = -Math.PI / 2');
     expect(draw).toContain('const a = starA0 + k * starStep');
-    expect(draw).not.toContain('k * (Math.PI * 2 / imp)');
+    // 不再是"沿上沿紧挨成串"的写法
+    expect(draw).not.toContain('const starStep = (sfs * 0.90) / starRing');
     expect(draw).toContain('ctx.rotate(a + Math.PI / 2)');
     expect(draw).toContain('ctx.fillStyle = IMP_COLOR[imp]');
+    // 标签在星环绕时下移，避免与下沿的星重叠
+    expect(draw).toContain("const ty = p.sy + r + 4 + (hasStar ? sfs * 0.62 : 0)");
     // 不再用一行 ★★★★★ 贴在节点上方
     expect(draw).not.toContain("'★★★★★'.slice(0, imp)");
     // 外环已按军哥要求去掉（与笔记琥珀环重复），不应再出现画环代码
