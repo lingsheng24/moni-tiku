@@ -64,6 +64,8 @@ function blockToOOXML(b) {
     case 'info': return wP(wT(b.t), '<w:spacing w:after="40"/>');
     case 'rule': return wP('', '<w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="000000"/></w:pBdr><w:spacing w:after="120"/>');
     case 'sec': return wP(wT(b.t, { sz: 22, b: true }), '<w:spacing w:before="160" w:after="60"/>');
+    /* v1.49.0：题型说明——每个题型开头那行答题要求（小字灰色，紧跟大题标题） */
+    case 'secnote': return wP(wT(b.t, { sz: 19, color: '444444' }), '<w:spacing w:before="0" w:after="100"/><w:jc w:val="both"/>');
     case 'q': return wP(wT(`${b.no}. ${b.t || ''}${b.tail || ''}${b.score ? `（${b.score}分）` : ''}`), '<w:spacing w:after="40"/><w:jc w:val="both"/>');
     case 'opts':
       if (b.inline) return wP(wT(b.arr.join('　　')), '<w:ind w:left="480"/><w:spacing w:after="40"/>');

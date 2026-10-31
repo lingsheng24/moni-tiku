@@ -359,10 +359,10 @@ function wsRenderResults() {
       <div class="ws-res-u">${esc(r.site || '')}${r.site ? ' · ' : ''}${esc(String(r.url).slice(0, 90))}</div>
       <div class="ws-res-s">${esc(r.snippet || '（该页面没有摘要，点标题打开查看）')}</div>
       <div class="ws-res-ft">
-        <button class="ghost" data-u="${esc(r.url)}" onclick="wsOpenLink(this.dataset.u)">打开原文</button>
-        <button class="ghost" data-u="${esc(r.url)}" onclick="wsCopy(this.dataset.u)">复制链接</button>
-        <button class="ghost" data-i="${i}" onclick="wsUseAsNote(+this.dataset.i)" title="把这条结果的标题、摘要和链接存成笔记">💾 存这条</button>
-        <button class="ghost" data-i="${i}" onclick="wsFavAddResult(+this.dataset.i)" title="收进收藏夹，随时回看">⭐ 收藏</button>
+        <button class="ibtn sm" data-tip="用浏览器打开原文" data-u="${esc(r.url)}" onclick="wsOpenLink(this.dataset.u)">🔗</button>
+        <button class="ibtn sm" data-tip="复制链接" data-u="${esc(r.url)}" onclick="wsCopy(this.dataset.u)">⧉</button>
+        <button class="ibtn sm" data-tip="把这条结果的标题、摘要和链接存成笔记" data-i="${i}" onclick="wsUseAsNote(+this.dataset.i)">💾</button>
+        <button class="ibtn sm" data-tip="收进收藏夹，随时回看" data-i="${i}" onclick="wsFavAddResult(+this.dataset.i)">⭐</button>
       </div>
     </div>`).join('');
 }
@@ -659,9 +659,9 @@ function wsFavRender() {
         <span class="t" ${f.url ? `data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)" title="${esc(f.url)}"` : ''} style="${f.url ? 'cursor:pointer' : ''}">${f.kind === 'ai' ? '🤖 ' : '🌐 '}${esc(f.title || f.q || '（无标题）')}</span>
         <span class="d">${fmtDate(f.at)}</span>
         <span class="op">
-          ${f.url ? `<button class="ghost" data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)">打开</button>` : ''}
-          <button class="ghost" data-id="${f.id}" onclick="wsFavNote(this.dataset.id)" title="整理成笔记存进知识库">转笔记</button>
-          <button class="ghost" data-id="${f.id}" onclick="wsFavDel(this.dataset.id)" title="从收藏夹删除">✕</button>
+          ${f.url ? `<button class="ibtn sm" data-tip="打开原文" data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)">🔗</button>` : ''}
+          <button class="ibtn sm" data-tip="整理成笔记存进知识库" data-id="${f.id}" onclick="wsFavNote(this.dataset.id)">📝</button>
+          <button class="ibtn sm danger" data-tip="从收藏夹删除" data-id="${f.id}" onclick="wsFavDel(this.dataset.id)">✕</button>
         </span>
       </div>`).join('')
       : '<div class="ws-empty">收藏夹还是空的 —— 网页结果卡上的「⭐ 收藏」、AI 解答旁的「⭐ 收藏回答」都能收进来</div>');
@@ -848,7 +848,7 @@ function renderRevCard() {
       ${card.reps ? `<span class="pill gray">第 ${card.reps} 轮</span>` : ''}
       ${card.lapses ? `<span class="pill amber">遗忘 ${card.lapses} 次</span>` : ''}
       ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，在题目上方可继续修改">📝 已记笔记</span>` : ''}
-      ${impStarsHTML(q)}
+      ${impStarsHTML(q)}${scorePillHTML(q)}
     </div>
     <div class="rev-q">${esc(q.content)}</div>
     <div id="revAnsWrap" class="${mode === 'answer' ? '' : 'hidden'}" style="width:100%;text-align:left;margin-top:6px">
@@ -1014,8 +1014,8 @@ function renderRevResult() {
   </div>
   <div class="row">
     <button class="primary" onclick="startTodayReview()">🔁 再复习一轮</button>
-    <button class="ghost" onclick="viewReview()">返回复习面板</button>
-    <button class="ghost" onclick="go('practice')">去答题练习</button>
+    <button class="ibtn" data-tip="返回复习面板" onclick="viewReview()">←</button>
+    <button class="ibtn" data-tip="去答题练习" onclick="go('practice')">✍️</button>
   </div>`;
   rev = null;
   refreshData();

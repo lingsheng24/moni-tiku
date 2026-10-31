@@ -107,7 +107,7 @@ describe('图谱详情卡渲染题目笔记（源码契约）', () => {
     expect(d).toContain('b.note_at || 0) - (a.note_at || 0)');
     expect(d).toContain('id="kpQNotes"');
     expect(d).toContain('✏️ 题目笔记（');
-    expect(d).toContain('📖 看原题');
+    expect(d).toContain('data-tip="看原题"');   // v1.49.0：按钮改为图标 + 悬停提示
   });
 
   test('顶部有「题目笔记 N 条」胶囊，点击滚动到笔记区', () => {

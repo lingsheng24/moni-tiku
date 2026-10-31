@@ -99,10 +99,21 @@ describe('图谱节点显示重要程度', () => {
     const pick = between('kpPick', 'function kpTick');
     expect(pick).toContain('(0.85 + ((p.n.imp || 3) - 3) * 0.12)');
   });
-  test('≥4 星节点画彩色外环，颜色取 IMP_COLOR', () => {
+  test('v1.49.0：≥4 星节点上沿紧挨着排一串星（星尖朝外），不再画彩色外环', () => {
     const draw = between('kpDraw', '/** 命中检测');
-    expect(draw).toContain('if (imp >= 4)');
-    expect(draw).toContain('kpAlpha(IMP_COLOR[imp]');
+    expect(draw).toContain('const hasStar = imp >= 4');
+    expect(draw).toContain('const starRing = r + sfs * 0.42');
+    // 星挨星沿上弧排布（不再按 360/imp 平均绕圈），并旋转使星尖朝外
+    expect(draw).toContain('const starStep = (sfs * 0.90) / starRing');
+    expect(draw).toContain('const starA0 = -Math.PI / 2 - (imp - 1) * starStep / 2');
+    expect(draw).toContain('const a = starA0 + k * starStep');
+    expect(draw).not.toContain('k * (Math.PI * 2 / imp)');
+    expect(draw).toContain('ctx.rotate(a + Math.PI / 2)');
+    expect(draw).toContain('ctx.fillStyle = IMP_COLOR[imp]');
+    // 不再用一行 ★★★★★ 贴在节点上方
+    expect(draw).not.toContain("'★★★★★'.slice(0, imp)");
+    // 外环已按军哥要求去掉（与笔记琥珀环重复），不应再出现画环代码
+    expect(draw).not.toContain('ctx.arc(p.sx, p.sy, r + (nc ? 6.2');
   });
   test('悬停提示显示重要程度星与档位名', () => {
     const tip = between('kpTipShow', '/** 双击知识点');
@@ -150,7 +161,7 @@ describe('题目列表接入重要程度', () => {
   test('复习会话（src/websearch.js）与卡片管理行内答题也带星', () => {
     const ws = fs.readFileSync(require('path').join(require('path').dirname(HTML_PATH), 'src', 'websearch.js'), 'utf8');
     expect(ws).toContain('impStarsHTML(q)');
-    const rv = HTML.indexOf("impStarsHTML(q)}<span style=\"color:var(--muted);font-size:12px\">点击星级标记重要程度");
+    const rv = HTML.indexOf("impStarsHTML(q)}${scorePillHTML(q)}<span style=\"color:var(--muted);font-size:12px\">点击星级标记重要程度");
     expect(rv).toBeGreaterThan(-1);
   });
   test('详情弹窗 kv 显示重要程度行', () => {

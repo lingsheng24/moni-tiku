@@ -140,6 +140,32 @@ button.danger{background:var(--red-soft);color:var(--red)}
 button.ghost{background:transparent;border:1px solid var(--border)}
 button:disabled{opacity:.5;cursor:not-allowed}
 button.sm{padding:5px 10px;font-size:12px;border-radius:6px}
+/* ---------- v1.49.0 图标按钮：常态只有一个图标，鼠标悬停才出提示 ----------
+   用法：<button class="ibtn" data-tip="提示文字" onclick="…">📤</button>
+   危险操作加 .danger，选中/开启态加 .on；底部工具栏用 .tip-up 让气泡朝上弹 */
+button.ibtn{display:inline-flex;align-items:center;justify-content:center;position:relative;
+  width:30px;height:30px;min-width:30px;padding:0;font-size:14.5px;line-height:1;
+  background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text);
+  transition:background .15s,border-color .15s,color .15s;flex:none}
+button.ibtn:hover{background:var(--panel2);border-color:var(--muted);filter:none}
+button.ibtn.sm{width:26px;height:26px;min-width:26px;font-size:13px;border-radius:7px}
+button.ibtn.danger:hover{color:var(--red);border-color:var(--red);background:var(--red-soft)}
+button.ibtn.on{color:var(--primary);border-color:var(--primary);background:var(--primary-soft)}
+/* 主操作版图标按钮（实心主色）：用于列表行里的「练这个 / 出题」这类主要动作 */
+button.ibtn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+button.ibtn.primary:hover{background:var(--primary-h);border-color:var(--primary-h);color:#fff;filter:none}
+button.ibtn::after{content:attr(data-tip);position:absolute;left:50%;top:calc(100% + 6px);
+  transform:translateX(-50%) translateY(-3px);background:#1f2937;color:#fff;
+  font-size:11.5px;font-weight:400;line-height:1.35;padding:4px 8px;border-radius:6px;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .12s,transform .12s;z-index:300;
+  box-shadow:0 4px 14px rgba(0,0,0,.22)}
+button.ibtn:hover::after{opacity:1;transform:translateX(-50%) translateY(0)}
+button.ibtn.tip-up::after{top:auto;bottom:calc(100% + 6px);transform:translateX(-50%) translateY(3px)}
+button.ibtn.tip-up:hover::after{transform:translateX(-50%) translateY(0)}
+button.ibtn:not([data-tip])::after{display:none}
+button.ibtn .ibtn-badge{position:absolute;top:-6px;right:-6px;min-width:15px;height:15px;padding:0 4px;
+  display:none;align-items:center;justify-content:center;border-radius:99px;background:var(--red);color:#fff;
+  font-size:10px;font-weight:700;line-height:1;box-shadow:0 0 0 2px var(--panel)}
 input,select,textarea{font:inherit;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);outline:none;width:100%}
 input:focus,select:focus,textarea:focus{border-color:var(--primary)}
 textarea{resize:vertical;min-height:90px}
@@ -212,6 +238,16 @@ tr.click:hover{background:var(--panel2);cursor:pointer}
 .kpz button:hover{background:var(--primary);border-color:var(--primary);color:#fff}
 .kpz .lbl{font-size:11px;color:var(--muted);text-align:center;font-weight:700}
 .kpz button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+/* v1.49.0：图谱右侧控制条统一悬停气泡（提示朝左展开，避免超出画布） */
+.kpz button{position:relative}
+.kpz button[data-tip]::after{content:attr(data-tip);position:absolute;right:calc(100% + 9px);top:50%;
+  transform:translateY(-50%) translateX(3px);background:#1f2937;color:#fff;font-size:11.5px;font-weight:400;
+  line-height:1.35;padding:4px 8px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;
+  transition:opacity .12s,transform .12s;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,.22)}
+.kpz button[data-tip]:hover::after{opacity:1;transform:translateY(-50%) translateX(0)}
+/* 浮标里的 ✕ 也统一成小方块，悬停给提示 */
+.kp-chip-x{width:20px;height:20px;min-width:20px;padding:0;border-radius:6px;border:none;background:var(--primary-soft);color:var(--primary);font-size:12px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.kp-chip-x:hover{background:var(--primary);color:#fff}
 /* v1.28.3：斥力调节浮层（右上角「⇹」按钮展开） */
 .kp-repel{position:absolute;right:54px;top:12px;z-index:4;display:none;width:188px;
   background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:9px 11px;
@@ -312,7 +348,7 @@ tr.click:hover{background:var(--panel2);cursor:pointer}
   overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .kb-note-ft{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);
   border-top:1px dashed var(--border);padding-top:8px;flex-wrap:wrap}
-.kb-note-ft button{padding:3px 8px;font-size:11.5px}
+.kb-note-ft button:not(.ibtn){padding:3px 8px;font-size:11.5px}
 .kb-cover{height:8px;border-radius:4px;background:var(--panel2);overflow:hidden;margin-top:10px}
 .kb-cover i{display:block;height:100%;background:var(--primary);transition:width .3s}
 .kb-note .kpn-del:hover{color:var(--red);border-color:var(--red)}
@@ -340,7 +376,7 @@ body.is-desktop .ws-mask{top:36px}
 .ws-res-u{font-size:11.5px;color:var(--muted);margin:3px 0 5px;word-break:break-all}
 .ws-res-s{font-size:12.5px;line-height:1.7;color:var(--text);opacity:.9;word-break:break-word}
 .ws-res-ft{display:flex;gap:6px;margin-top:6px}
-.ws-res-ft button{padding:2px 8px;font-size:11.5px}
+.ws-res-ft button:not(.ibtn){padding:2px 8px;font-size:11.5px}
 .ws-ai{font-size:13.5px;line-height:1.85;white-space:pre-wrap;word-break:break-word}
 /* ---------- 联网查询 v1.38.0：AI 追问气泡 / 搜索联想 / 收藏夹 ---------- */
 .ws-head{position:relative}
@@ -355,7 +391,7 @@ body.is-desktop .ws-mask{top:36px}
 .ws-msg.user{background:var(--panel2);border:1px solid var(--border);margin-left:26px}
 .ws-msg.ai{background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--primary);margin-right:10px}
 .ws-msg .ws-msg-op{display:flex;gap:6px;margin-top:6px}
-.ws-msg .ws-msg-op button{padding:2px 8px;font-size:11px}
+.ws-msg .ws-msg-op button:not(.ibtn){padding:2px 8px;font-size:11px}
 .ws-ai-in{display:flex;gap:6px;padding:8px 14px 10px;border-top:1px dashed var(--border)}
 .ws-ai-in input{flex:1;min-width:0}
 .ws-fav-i{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border);
@@ -364,7 +400,7 @@ body.is-desktop .ws-mask{top:36px}
 .ws-fav-i .t:hover{color:var(--primary)}
 .ws-fav-i .d{color:var(--muted);font-size:11px;white-space:nowrap;flex:none}
 .ws-fav-i .op{display:flex;gap:4px;flex:none}
-.ws-fav-i .op button{padding:2px 7px;font-size:11px}
+.ws-fav-i .op button:not(.ibtn){padding:2px 7px;font-size:11px}
 .ws-fav-badge{background:var(--primary);color:#fff;border-radius:8px;padding:0 5px;font-size:10.5px;margin-left:2px}
 .ws-empty{color:var(--muted);font-size:12.5px;line-height:1.9;padding:8px 2px}
 .ws-hist{display:flex;flex-direction:column;gap:6px}
@@ -646,7 +682,7 @@ body.is-desktop #toast{top:48px}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '1.48.2';
+const APP_VER = '1.49.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -1642,7 +1678,7 @@ const dbPut = (store, val, ms = 12000) => withTimeoutP(DB.put(store, val), ms, D
  * 复习会话、卡片管理行内答题、题库浏览三处共用同一份数据。 */
 /* ---------- 题目重要程度（v1.46.0） ----------
  * 存在 questions[].importance 上（1~5，未标记视为 3），与笔记一样随题库备份 / 导出；
- * 知识点重要程度 = 其下题目的最高星，图谱节点大小与外环颜色按此显示。 */
+ * 知识点重要程度 = 其下题目的最高星，图谱节点大小与节点上方的星数按此显示。 */
 const IMP_LABEL = { 1: '了解', 2: '一般', 3: '较重要', 4: '重要', 5: '核心' };
 const IMP_COLOR = { 1: '#94a3b8', 2: '#64748b', 3: '#0ea5e9', 4: '#f59e0b', 5: '#ef4444' };
 function impOf(q) { const n = q && +q.importance || 0; return n >= 1 && n <= 5 ? n : 3; }
@@ -2327,9 +2363,9 @@ function subjectManagerCard() {
     return `<div class="subj-card">
         <div class="t">${subjTag(s.id)}<span>${esc(s.name)}</span></div>
         <div class="m">📄 ${k.docs} 篇文档　📝 ${k.qs} 道题</div>
-        <div class="row"><button class="sm ghost" onclick="openSubjForm('${esc(s.id)}')">✏️ 重命名</button>
+        <div class="row"><button class="ibtn sm" data-tip="重命名科目" onclick="openSubjForm('${esc(s.id)}')">✏️</button>
           <span style="flex:1"></span>
-          <button class="sm danger" onclick="delSubj('${esc(s.id)}')">删除</button></div>
+          <button class="ibtn sm danger" data-tip="删除科目（文档与题目保留）" onclick="delSubj('${esc(s.id)}')">🗑</button></div>
       </div>`;
   }).join('')}</div>` : '<div class="empty">还没有科目。点下方「＋ 新建科目」，例如：语文、高等数学、安全生产法规</div>'}
     <div class="row" style="margin-top:12px"><button class="ghost" id="subjAddBtn">＋ 新建科目</button></div>
@@ -2418,9 +2454,11 @@ async function viewDocs() {
       <span style="font-size:12px;color:var(--muted)">📥 导入文件（或粘贴文本）时会弹出「归入科目」选择，与上方科目管理联动；不选则归入未分类</span>
     </div>` : ''}
     <div style="margin-top:14px">
-      <button class="ghost" id="pasteBtn">📋 粘贴文本创建文档</button>
-      <button class="ghost" onclick="qTplExport()">📤 导出出题模板</button>
-      <button class="ghost" onclick="qTplImportModal()">📥 导入模板题目</button>
+      <div class="row" style="gap:8px">
+        <button class="ibtn" id="pasteBtn" data-tip="粘贴文本创建文档">📋</button>
+        <button class="ibtn" data-tip="导出出题模板（Word / Excel 空白录入表）" onclick="qTplExport()">📤</button>
+        <button class="ibtn" data-tip="导入模板题目（选文件或粘贴 Excel 表格）" onclick="qTplImportModal()">📥</button>
+      </div>
       <div id="pasteBox" class="hidden" style="margin-top:10px">
         <input id="pasteTitle" placeholder="文档标题（可选）" style="margin-bottom:8px">
         <textarea id="pasteText" rows="6" placeholder="把学习资料、笔记、章节内容粘贴到这里…"></textarea>
@@ -2440,9 +2478,9 @@ async function viewDocs() {
           </select>` : '<span style="color:var(--muted);font-size:12px">未分类</span>'}</td>
         <td><span class="pill gray">${(d.file_type || '').toUpperCase()}</span></td>
         <td>${(d.file_size / 1024).toFixed(1)} KB</td><td>${qn}</td><td>${fmtDate(d.created_at)}</td>
-        <td class="row"><button class="sm ghost" onclick="showDoc(${d.id})">预览</button>
-        <button class="sm primary" onclick="genFromDoc(${d.id})">出题</button>
-        <button class="sm danger" onclick="delDoc(${d.id})">删除</button></td></tr>`;
+        <td class="row"><button class="ibtn sm" data-tip="预览原文" onclick="showDoc(${d.id})">👁</button>
+        <button class="ibtn sm on" data-tip="用这篇文档 AI 出题" onclick="genFromDoc(${d.id})">✨</button>
+        <button class="ibtn sm danger" data-tip="删除文档（其下题目保留）" onclick="delDoc(${d.id})">🗑</button></td></tr>`;
       }).join('')}</table>` : '<div class="empty">还没有导入文档</div>'}
   </div>`;
   bindSubjectManager();
@@ -2512,6 +2550,7 @@ function viewQuestion(id) {
     ${qNote(q) ? `<div class="q-note-show">📝 <b>我的笔记</b>：${esc(qNote(q))}</div>` : ''}
     <dl class="kv" style="margin-top:12px">
       <dt>重要程度</dt><dd>${impStarsHTML(q)}<span style="color:var(--muted);font-size:12px;margin-left:6px">${IMP_LABEL[impOf(q)]}</span></dd>
+      <dt>分值</dt><dd>${scorePillHTML(q)}<span style="color:var(--muted);font-size:12px;margin-left:6px">按题型统一设置（系统设置 → 题型分值）</span></dd>
       <dt>来源文档</dt><dd>${doc ? esc(doc.title) : '—'}</dd>
       <dt>练习记录</dt><dd>${pc.length} 次${rate !== null ? `，正确率 ${rate}%` : ''}</dd>
       <dt>创建时间</dt><dd>${fmtDate(q.created_at)}</dd>
@@ -2758,7 +2797,7 @@ async function viewBank() {
   <div class="card noprint">
     <div class="row" style="margin-bottom:10px">
       <input id="fKw" placeholder="🔍 搜索题干 / 答案 / 解析 / 知识点…" value="${esc(bankFilter.kw)}" style="flex:1;min-width:200px">
-      <button class="ghost" id="fClear" title="清空筛选">重置</button>
+      <button class="ibtn" id="fClear" data-tip="清空全部筛选条件">⟲</button>
     </div>
     <div class="row">
       ${subjects.length ? `<select id="fSubj" style="width:auto;min-width:120px">
@@ -2772,11 +2811,11 @@ async function viewBank() {
       <select id="fImp" style="width:auto" title="按重要程度筛选"><option value="">全部重要度</option>
         ${[5, 4, 3, 2, 1].map(n => `<option value="${n}" ${bankFilter.imp === String(n) ? 'selected' : ''}>${'★'.repeat(n)} ${IMP_LABEL[n]}</option>`).join('')}</select>
       <span style="flex:1"></span>
-      <button class="ghost" onclick="qTplImportModal()">📥 导入模板题目</button>
-      <button class="ghost" onclick="delSelected()" id="delSelBtn" disabled>删除所选 (0)</button>
-      <button class="ghost" onclick="exportWord()">📤 导出 Word</button>
-      <button class="ghost" onclick="exportPDF()">🖨 打印 / PDF</button>
-      <button class="danger" onclick="clearBank()">清空题库</button>
+      <button class="ibtn" data-tip="导入模板题目（选文件或粘贴 Excel）" onclick="qTplImportModal()">📥</button>
+      <button class="ibtn danger" onclick="delSelected()" id="delSelBtn" disabled data-tip="删除所选（先勾选题目）">🗑<span class="ibtn-badge"></span></button>
+      <button class="ibtn" data-tip="导出 Word（按当前筛选结果）" onclick="exportWord()">📤</button>
+      <button class="ibtn" data-tip="打印 / 导出 PDF" onclick="exportPDF()">🖨</button>
+      <button class="ibtn danger" data-tip="清空当前题库的全部题目" onclick="clearBank()">🧹</button>
     </div>
   </div>
   <div id="bankList">
@@ -2791,13 +2830,14 @@ async function viewBank() {
         ${(() => { const s = qSubjectId(q); return s ? `<span class="pill gray">${subjTag(s)}${esc(subjNameOf(s))}</span>` : ''; })()}
         ${q.knowledge_point ? `<span class="pill amber">${esc(q.knowledge_point)}</span>` : ''}
         ${impStarsHTML(q)}
+        ${scorePillHTML(q)}
         ${doc ? `<span class="pill gray">📄 ${esc(doc.title)}</span>` : ''}
         ${rate !== null ? `<span class="pill ${rate >= 70 ? 'green' : 'red'}">正确率 ${rate}% (${pc.length})</span>` : ''}
         <span style="flex:1"></span>
-        <button class="sm ghost" onclick="editQNote(${q.id})">📝 笔记</button>
-        <button class="sm ghost" onclick="editQ(${q.id})">编辑</button>
-        <button class="sm ghost" onclick="reviewQuestion(${q.id})">🔁 复习</button>
-        <button class="sm danger" onclick="delQ(${q.id})">删除</button></div>
+        <button class="ibtn sm" data-tip="我的笔记" onclick="editQNote(${q.id})">📝</button>
+        <button class="ibtn sm" data-tip="编辑题目" onclick="editQ(${q.id})">✏️</button>
+        <button class="ibtn sm" data-tip="加入复习" onclick="reviewQuestion(${q.id})">🔁</button>
+        <button class="ibtn sm danger" data-tip="删除这道题" onclick="delQ(${q.id})">🗑</button></div>
       <div class="q-content">${esc(q.content)}</div>
       ${q.options ? q.options.map(o => `<div class="q-opt">${esc(o)}</div>`).join('') : ''}
       <div class="q-ans"><b>答案：</b>${esc(q.answer)}${q.explanation ? `<br><b style="color:var(--muted)">解析：</b>${esc(q.explanation)}` : ''}</div>
@@ -2807,9 +2847,9 @@ async function viewBank() {
   }).join('') : '<div class="card"><div class="empty">没有符合条件的题目</div></div>'}
   </div>
   ${pages > 1 ? `<div class="pager noprint">
-    <button class="ghost" ${bankPage === 1 ? 'disabled' : ''} onclick="bankPage=bankPage-1;viewBank()">← 上一页</button>
+    <button class="ibtn tip-up" ${bankPage === 1 ? 'disabled' : ''} data-tip="上一页" onclick="bankPage=bankPage-1;viewBank()">←</button>
     <span style="color:var(--muted);font-size:13px">第 ${bankPage} / ${pages} 页</span>
-    <button class="ghost" ${bankPage === pages ? 'disabled' : ''} onclick="bankPage=bankPage+1;viewBank()">下一页 →</button>
+    <button class="ibtn tip-up" ${bankPage === pages ? 'disabled' : ''} data-tip="下一页" onclick="bankPage=bankPage+1;viewBank()">→</button>
   </div>` : ''}`;
   let timer = null;
   $('#fKw').oninput = e => {
@@ -2826,7 +2866,11 @@ async function viewBank() {
     const id = +e.target.dataset.id;
     e.target.checked ? bankSel.add(id) : bankSel.delete(id);
     const btn = $('#delSelBtn');
-    btn.disabled = !bankSel.size; btn.textContent = `删除所选 (${bankSel.size})`;
+    btn.disabled = !bankSel.size;
+    /* v1.49.0：图标按钮——选中数用右上角角标显示，悬停提示同步更新 */
+    const badge = btn.querySelector('.ibtn-badge');
+    if (badge) { badge.textContent = bankSel.size || ''; badge.style.display = bankSel.size ? 'flex' : 'none'; }
+    btn.dataset.tip = bankSel.size ? `删除所选（${bankSel.size} 题）` : '删除所选（先勾选题目）';
   });
 }
 async function delSelected() {
@@ -4004,7 +4048,7 @@ function kpDraw() {
     if (related) {
       const ang = Math.atan2(pb.sy - pa.sy, pb.sx - pa.sx);
       const size = Math.max(4, Math.min(9, 4 * scale + lw * 1.5));
-      const ra = Math.max(6, 8 * pa.s) + 2, rb = Math.max(6, 8 * pb.s) + 2;
+      const ra = Math.max(5, 6.8 * pa.s) + 2, rb = Math.max(5, 6.8 * pb.s) + 2;
       const ac = kpAlpha(col, Math.min(0.95, alpha + 0.2));
       kpArrowHead(ctx, pa.sx + Math.cos(ang) * ra, pa.sy + Math.sin(ang) * ra, ang + Math.PI, size, ac);
       kpArrowHead(ctx, pb.sx - Math.cos(ang) * rb, pb.sy - Math.sin(ang) * rb, ang, size, ac);
@@ -4045,9 +4089,10 @@ function kpDraw() {
     if (!kpNodeVisible(nd)) return;                          // v1.28.4 掌握度筛选 / v1.35.0 有笔记筛选
     const isSel = kpSelected === nd.name, isHover = kpHover === i;
     const isNbr = nbrNames.has(nd.name) && !isSel && !isHover;
-    /* v1.23.0：节点大小不再随题量变化；v1.46.0：随知识点重要程度微调（1星 0.85× … 5星 1.25×） */
+    /* v1.23.0：节点大小不再随题量变化；v1.46.0：随知识点重要程度微调（1星 0.85× … 5星 1.25×）
+     * v1.49.0：整体基准半径 8→6.8，图面更紧凑、节点更小 */
     const imp = nd.imp || 3;
-    const r = Math.max(3, 8 * p.s * (0.85 + (imp - 3) * 0.12));
+    const r = Math.max(3, 6.8 * p.s * (0.85 + (imp - 3) * 0.12));
     const fade = 0.34 + 0.66 * ((p.z + 1) / 2) * (focusName && !isSel && !isHover && !isNbr ? 0.35 : 1);
     if (isSel || isHover) {                                   // 选中/悬停光环
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r + 7, 0, Math.PI * 2);
@@ -4073,12 +4118,7 @@ function kpDraw() {
       ctx.fillStyle = '#f59e0b'; ctx.fill();
       ctx.lineWidth = 1; ctx.strokeStyle = kpAlpha('#ffffff', 0.9); ctx.stroke();
     }
-    /* v1.46.0：重要程度 ≥4 星的知识点 —— 最外圈加一道彩色环（4星橙 / 5星红），一眼看出哪些是重点 */
-    if (imp >= 4) {
-      ctx.beginPath(); ctx.arc(p.sx, p.sy, r + (nc ? 6.2 : 3.2), 0, Math.PI * 2);
-      ctx.strokeStyle = kpAlpha(IMP_COLOR[imp], 0.32 + 0.48 * ((p.z + 1) / 2));
-      ctx.lineWidth = 1.7; ctx.stroke();
-    }
+    /* v1.49.0：重要程度不再画彩色外环（与笔记琥珀环在视觉上重复），改为星数环绕节点 */
     /* v1.23.0：节点内不再显示题量数字，信息改由悬停提示呈现 */
     // ③ 标签：正面、重要或高亮的才画，避免背面糊成一团
     const showLabel = p.z > -0.12 || isSel || isHover || nodes.length <= 20 || isNbr;
@@ -4087,9 +4127,16 @@ function kpDraw() {
       const cut = 8;
       const label = full.length > cut ? full.slice(0, cut) + '…' : full;
       const fs = Math.max(10, Math.min(15, 11.5 * p.s));
+      /* v1.49.0：4 星起把星数标在节点上沿（紧贴边缘、彼此挨着），替代原来的彩色外环 */
+      const hasStar = imp >= 4;
+      const sfs = Math.max(6.5, Math.min(10, 7.6 * p.s));         // 星标字号随景深
+      const starRing = r + sfs * 0.42;                            // 星心所在圆周半径（紧贴节点边缘）
+      const starStep = (sfs * 0.90) / starRing;                   // 单颗星占的圆心角：星挨星不留空
+      const starA0 = -Math.PI / 2 - (imp - 1) * starStep / 2;     // 整串以正上方居中
       ctx.font = `${isSel || isHover ? 700 : 500} ${fs.toFixed(1)}px system-ui,"Microsoft YaHei",sans-serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      const tw = ctx.measureText(label).width, tx = p.sx, ty = p.sy + r + 4;
+      const tw = ctx.measureText(label).width, tx = p.sx;
+      const ty = p.sy + r + 4;
       if (isSel || isHover) {                                 // 白底提升可读性
         ctx.fillStyle = kpAlpha('#ffffff', 0.88);
         ctx.fillRect(tx - tw / 2 - 4, ty - 1, tw + 8, fs + 5);
@@ -4098,6 +4145,22 @@ function kpDraw() {
       ctx.globalAlpha = (isSel || isHover) ? 1 : 0.30 + 0.70 * ((p.z + 1) / 2);
       ctx.fillText(label, tx, ty);
       ctx.globalAlpha = 1;
+      /* v1.49.0：星数沿节点上沿紧挨着排成一串，星尖朝外；星数 = 重要程度 */
+      if (hasStar) {
+        ctx.font = `700 ${sfs.toFixed(1)}px system-ui,"Microsoft YaHei",sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = IMP_COLOR[imp];
+        ctx.globalAlpha = (isSel || isHover) ? 1 : 0.45 + 0.55 * ((p.z + 1) / 2);
+        for (let k = 0; k < imp; k++) {
+          const a = starA0 + k * starStep;                        // 相邻星紧挨，不留均匀间隔
+          ctx.save();
+          ctx.translate(p.sx + Math.cos(a) * starRing, p.sy + Math.sin(a) * starRing);
+          ctx.rotate(a + Math.PI / 2);                            // 星尖指向外侧
+          ctx.fillText('★', 0, 0);
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+      }
     }
   });
 }
@@ -4107,8 +4170,8 @@ function kpPick(mx, my) {
   let best = -1, bestZ = -Infinity;
   kpProj.forEach((p, i) => {
     if (!kpNodeVisible(p.n)) return;                        // 被筛选掉的节点不可点
-    const r = Math.max(6, 8 * p.s * (0.85 + ((p.n.imp || 3) - 3) * 0.12));
-    if (Math.hypot(mx - p.sx, my - p.sy) <= r + 3 && p.z > bestZ) { best = i; bestZ = p.z; }
+    const r = Math.max(5, 6.8 * p.s * (0.85 + ((p.n.imp || 3) - 3) * 0.12));
+    if (Math.hypot(mx - p.sx, my - p.sy) <= r + 4 && p.z > bestZ) { best = i; bestZ = p.z; }
   });
   return best;
 }
@@ -4255,7 +4318,7 @@ function kpTipShow(i, mx, my) {
     : '';
   const html = `<b>${esc(nd.name)}</b><br>` +
     `${nd.size} 题 · ${nd.rate === null ? '未练习' : '正确率 ' + nd.rate + '%'}` + secTxt +
-    `<br><span style="color:${IMP_COLOR[nd.imp || 3]}">⭐ 重要程度：${'★'.repeat(nd.imp || 3)} ${IMP_LABEL[nd.imp || 3]}</span><span style="color:var(--muted)">（节点越大星越多）</span>` +
+    `<br><span style="color:${IMP_COLOR[nd.imp || 3]}">⭐ 重要程度：${'★'.repeat(nd.imp || 3)} ${IMP_LABEL[nd.imp || 3]}</span><span style="color:var(--muted)">（4 星起节点四周环绕星数）</span>` +
     (kpNoteCount(nd.name) ? `<br><span style="color:var(--amber)">📝 ${kpNoteCount(nd.name)} 条笔记</span><span style="color:var(--muted)">（单击节点可看）</span>` : '') +
     (nb.length
       ? `<br><span style="color:var(--primary)">🔗 双链 ${nb.length} 个</span><span style="color:var(--muted)">（${kpKindCount(nb)}）</span>` +
@@ -4301,7 +4364,7 @@ function kpRelModal(name) {
         <span style="flex:1"></span>
         <span class="pill gray">${x.size} 题</span>
         ${x.rate === null ? '<span class="pill gray">未练习</span>' : `<span class="pill ${x.rate >= 80 ? 'green' : x.rate >= 60 ? 'amber' : 'red'}">${x.rate}%</span>`}
-        <button class="sm ghost" onclick="selectKP('${esc(x.name)}');closeModal()">跳转 →</button></div>`).join('')
+        <button class="ibtn sm" data-tip="跳转到这个知识点" onclick="selectKP('${esc(x.name)}');closeModal()">→</button></div>`).join('')
       : '<div class="empty" style="padding:10px 0">这个知识点还没有可自动识别的关联（既没有同题共现的知识点，也不在同章节、题干也不相似）</div>'}
     </div>
     <div class="kp-rel-sec"><b>关联题目（${qs.length}）</b>
@@ -4309,7 +4372,7 @@ function kpRelModal(name) {
         <div class="q-head"><span class="pill blue">${TYPES[q.type]}</span><span class="pill gray">${DIFFS[q.difficulty] || ''}</span>
           ${impStarsHTML(q)}
           <span style="flex:1;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(kpsOf(q).join('、'))}</span>
-          <button class="sm ghost" onclick="viewQuestion(${q.id})">详情</button></div>
+          <button class="ibtn sm" data-tip="题目详情" onclick="viewQuestion(${q.id})">ℹ️</button></div>
         <div class="q-content">${esc(q.content)}</div>
       </div>`).join('')}
     </div>
@@ -4352,7 +4415,7 @@ function kpSectionModal(label) {
         <div class="q-head"><span class="pill blue">${TYPES[q.type]}</span><span class="pill gray">${DIFFS[q.difficulty] || ''}</span>
           ${impStarsHTML(q)}
           <span style="flex:1;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(splitKP(q.knowledge_point).join('、'))}</span>
-          <button class="sm ghost" onclick="viewQuestion(${q.id})">详情</button></div>
+          <button class="ibtn sm" data-tip="题目详情" onclick="viewQuestion(${q.id})">ℹ️</button></div>
         <div class="q-content">${esc(q.content)}</div>
       </div>`).join('') || '<div class="empty" style="padding:10px 0">暂无题目</div>'}
       ${qs.length > 30 ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">仅显示前 30 道，共 ${qs.length} 道</div>` : ''}
@@ -4385,7 +4448,7 @@ async function viewKP(reset) {
   const linkTxt = `${edges.length} 条双链（同题 ${cnt.co} · 同章节 ${cnt.sec} · 相似 ${cnt.qsim}）`;
   const soloKps = kpNodes.filter(n => !edges.some(([a, b]) => a === n.i || b === n.i)).length;
   $('#view').innerHTML = `
-  <h1>知识点图谱</h1><div class="sub">${kpNodes.length} 个知识点${total > kpNodes.length ? `<span style="color:var(--amber)">（题库共 ${total} 个，图上按题量取前 ${kpNodes.length} 个，<b>写过笔记的一律保留</b>）</span>` : ''}${linkOn ? ` · ${linkTxt}` : ''} · ${state.questions.length} 道题　拖动旋转球体 · 滚轮缩放 · 悬停暂停旋转看详情 · 单击选中 · 双击沿双链展开 · 点空白取消选中</div>
+  <h1>知识点图谱</h1><div class="sub">${kpNodes.length} 个知识点${total > kpNodes.length ? `<span style="color:var(--amber)">（题库共 ${total} 个，图上按题量取前 ${kpNodes.length} 个，<b>写过笔记的一律保留</b>）</span>` : ''}${linkOn ? ` · ${linkTxt}` : ''} · ${state.questions.length} 道题</div>
   <div class="card noprint"><div class="row" style="margin-bottom:12px">
     ${subjects.length ? `<select id="kpSubj" style="width:auto;min-width:118px">${subjectOptionsHTML(kpSubject, '全部科目')}</select>` : ''}
     <label class="kp-tgl" title="双链：知识点之间的关联由系统自动识别，不用手工连；共现题数越多线越粗">
@@ -4403,14 +4466,14 @@ async function viewKP(reset) {
     <label class="kp-tgl" title="只看重要程度 ≥4 星（重要 / 核心）的知识点；星标在题目上点星级即可设置">
       <input type="checkbox" id="kpImpChk" ${kpImpOnlyOn() ? 'checked' : ''}> ⭐ 重要（<span id="kpImpN">${kpImpCount()}</span>）
     </label>
-    <span class="pill gray">掌握度（点一下只看该档）</span>
+    <span class="pill gray" title="点一下只看该档掌握度，再点一次恢复全部">掌握度</span>
     <span id="kpMastery">
       <button type="button" class="kp-legend-item ${kpMasteryFilter === 'good' ? 'active' : ''}" data-m="good" aria-pressed="${kpMasteryFilter === 'good'}" title="只看已掌握（正确率 ≥80%）的知识点，再点一次恢复全部"><i class="dot" style="background:#16a34a"></i>≥80%</button>
       <button type="button" class="kp-legend-item ${kpMasteryFilter === 'mid' ? 'active' : ''}" data-m="mid" aria-pressed="${kpMasteryFilter === 'mid'}" title="只看待巩固（正确率 60–79%）的知识点，再点一次恢复全部"><i class="dot" style="background:#d97706"></i>60-79%</button>
       <button type="button" class="kp-legend-item ${kpMasteryFilter === 'low' ? 'active' : ''}" data-m="low" aria-pressed="${kpMasteryFilter === 'low'}" title="只看薄弱（正确率 &lt;60%）的知识点，再点一次恢复全部"><i class="dot" style="background:#dc2626"></i>&lt;60%</button>
       <button type="button" class="kp-legend-item ${kpMasteryFilter === 'none' ? 'active' : ''}" data-m="none" aria-pressed="${kpMasteryFilter === 'none'}" title="只看还没练习过的知识点，再点一次恢复全部"><i class="dot" style="background:#94a3b8"></i>未练习</button>
     </span>
-    ${linkOn ? `<span class="pill gray" style="margin-left:6px">关联类型（点一下只看该类）</span>
+    ${linkOn ? `<span class="pill gray" style="margin-left:6px" title="点一下只看该类关联，再点一次恢复全部">关联类型</span>
     <span id="kpLegend">
       <button type="button" class="kp-legend-item ${kpEdgeFilter === 'co2' ? 'active' : ''}" data-f="co2" aria-pressed="${kpEdgeFilter === 'co2'}" title="只看「同题 ≥2 道」的强关联，再点一次恢复全部"><i class="ln" style="border-top:2px solid #3b82f6"></i>同题 ≥2</button>
       <button type="button" class="kp-legend-item ${kpEdgeFilter === 'co1' ? 'active' : ''}" data-f="co1" aria-pressed="${kpEdgeFilter === 'co1'}" title="只看「同题 1 道」的弱关联，再点一次恢复全部"><i class="ln dash" style="border-top-color:#94a3b8;border-top-style:dashed"></i>同题 1</button>
@@ -4423,17 +4486,17 @@ async function viewKP(reset) {
   </div>
   <div id="kpWrap">
     <div class="kpz">
-      <button onclick="kpZoom(1.25)" title="放大（滚轮向上）">＋</button>
-      <button onclick="kpZoom(1/1.25)" title="缩小（滚轮向下）">－</button>
-      <button onclick="kpResetView()" title="重置视角">⟲</button>
-      <button onclick="kpToggleSpin()" title="${kpCam.autoSpin ? '暂停自动旋转' : '开启自动旋转'}">${kpCam.autoSpin ? '⏸' : '▶'}</button>
-      <button onclick="kpToggleFull()" title="${kpFull ? '退出大图' : '大图模式'}">${kpFull ? '⤡' : '⛶'}</button>
-      <button id="kpRepelBtn" onclick="kpToggleRepel()" title="斥力调节：知识点簇太挤就往大调，太散就往小调">⇹</button>
+      <button onclick="kpZoom(1.25)" data-tip="放大（滚轮向上）">＋</button>
+      <button onclick="kpZoom(1/1.25)" data-tip="缩小（滚轮向下）">－</button>
+      <button onclick="kpResetView()" data-tip="重置视角">⟲</button>
+      <button onclick="kpToggleSpin()" data-tip="${kpCam.autoSpin ? '暂停自动旋转' : '开启自动旋转'}">${kpCam.autoSpin ? '⏸' : '▶'}</button>
+      <button onclick="kpToggleFull()" data-tip="${kpFull ? '退出大图模式' : '大图模式'}">${kpFull ? '⤡' : '⛶'}</button>
+      <button id="kpRepelBtn" onclick="kpToggleRepel()" data-tip="斥力调节：簇太挤往大调，太散往小调">⇹</button>
       <div class="lbl" id="kpZoomLbl">${Math.round(kpCam.zoom * 100)}%</div>
     </div>
     <div class="kp-repel" id="kpRepelPanel">
       <div class="kp-repel-hd"><b>斥力</b><span id="kpRepelVal">${kpRepelVal().toFixed(1)}×</span>
-        <span style="flex:1"></span><button onclick="kpRepelSet(1);toast('本组斥力已恢复默认 1.0×')" title="只把当前科目（或全部科目）恢复成 1.0×">默认</button></div>
+        <span style="flex:1"></span><button onclick="kpRepelSet(1);toast('本组斥力已恢复默认 1.0×')" title="恢复默认 1.0×">↺</button></div>
       <input type="range" id="kpRepelRng" min="0.5" max="2.5" step="0.1" value="${kpRepelVal()}" aria-label="斥力强度">
       <div class="kp-repel-tip">适用于 <b id="kpRepelScope">${esc(kpRepelScopeText())}</b>（每个科目单独记忆）<br>簇太挤 → 往右调大；节点太散 → 往左调小</div>
     </div>
@@ -4456,7 +4519,7 @@ async function viewKP(reset) {
     <div class="card"><h3>🆕 尚未练习 Top 5</h3>
       ${noPractice.length ? noPractice.map(n => `<div class="bar-row"><span class="name" style="cursor:pointer" onclick="selectKP('${esc(n.name)}')">${esc(n.name)}</span>
         <span style="flex:1;color:var(--muted);font-size:12px">${n.size} 道题待练</span>
-        <button class="sm primary" onclick="practiceKP('${esc(n.name)}')">练它</button></div>`).join('')
+        <button class="ibtn sm primary" data-tip="练这个知识点的题" onclick="practiceKP('${esc(n.name)}')">▶</button></div>`).join('')
       : '<div class="empty" style="padding:16px 0">全部知识点都已练习过</div>'}
     </div>
   </div>
@@ -4569,11 +4632,11 @@ function renderKPDetail(name) {
       ${nbs.length ? `<span class="pill blue" style="cursor:pointer" onclick="kpRelModal('${esc(name)}')">🔗 双链 ${nbs.length}</span>` : '<span class="pill gray">暂无关联</span>'}
       ${mists.length ? `<span class="pill red" style="cursor:pointer" onclick="go('mist')" title="去错题本">📕 错题 ${mists.length} 条</span>` : ''}
       ${kpNoteCount(name) ? `<span class="pill amber" style="cursor:pointer" onclick="go('kb')" title="去知识库看这个知识点的全部笔记">📝 笔记 ${kpNoteCount(name)} 条</span>` : ''}
-      ${node.imp >= 4 ? `<span class="pill ${node.imp >= 5 ? 'red' : 'amber'}" title="该知识点下题目的最高重要程度，图上外环颜色与此对应">⭐ ${IMP_LABEL[node.imp]} ${'★'.repeat(node.imp)}</span>` : ''}
+      ${node.imp >= 4 ? `<span class="pill ${node.imp >= 5 ? 'red' : 'amber'}" title="该知识点下题目的最高重要程度，图上节点上方显示的星数与此对应">⭐ ${IMP_LABEL[node.imp]} ${'★'.repeat(node.imp)}</span>` : ''}
       ${qNotes.length ? `<span class="pill violet" style="cursor:pointer" onclick="scrollKPNotes()" title="该知识点下每道题的笔记，点击跳到下方列表">✏️ 题目笔记 ${qNotes.length} 条</span>` : ''}
       <span style="flex:1"></span>
-      <button class="sm ghost" data-kp="${esc(name)}" onclick="wsOpen(this.dataset.kp, this.dataset.kp)" title="联网查询这个知识点，可把结果存进知识库">🔍 联网查询</button>
-      <button class="sm ghost" onclick="clearKPSelection()" title="取消选中（Esc / 点球体空白处）">✕ 取消选择</button>
+      <button class="ibtn sm" data-tip="联网查询这个知识点，结果可存成笔记" data-kp="${esc(name)}" onclick="wsOpen(this.dataset.kp, this.dataset.kp)">🔍</button>
+      <button class="ibtn sm" data-tip="取消选中（Esc）" onclick="clearKPSelection()">✕</button>
       <button class="sm primary" onclick="practiceKP('${esc(name)}')">▶ 练习这些题</button></h3>
     ${/* ---- 双链：关联知识点 + 章节归属（v1.27.0） ---- */''}
     <div style="margin:12px 0 4px;padding-top:12px;border-top:1px dashed var(--border)">
@@ -4591,7 +4654,7 @@ function renderKPDetail(name) {
       <textarea id="kpn-ta" placeholder="记录这个知识点的要点、易错点、联想记忆…（保存后与错题本联动展示）">${esc(noteRec?.text || '')}</textarea>
       <div class="row">
         <button class="primary sm" onclick="saveKPNote('${esc(name)}')">保存笔记</button>
-        <button class="ghost sm" onclick="toggleKPNote()">收起</button>
+        <button class="ibtn sm" data-tip="收起笔记编辑框" onclick="toggleKPNote()">▴</button>
       </div>
     </div>
     <div class="row" style="margin-top:8px">
@@ -4602,14 +4665,14 @@ function renderKPDetail(name) {
       <b>✏️ 题目笔记（${qNotes.length}）</b>
       <span style="color:var(--muted);font-size:12px">复习或答题练习时在题目上方写的笔记，按知识点自动汇总到这里；此处看到的就是原题上的笔记，改它等于改原题</span>
       <div class="row" style="margin:8px 0">
-        <button class="ghost sm" onclick="go('kb')" title="在知识库里按「✏️ 题目笔记」筛选">📚 去知识库看全部 →</button>
+        <button class="ibtn sm" data-tip="去知识库看这个知识点的全部题目笔记" onclick="go('kb')">📚</button>
       </div>
       ${qNotes.map(q => `<div class="q-item">
         <div class="q-head"><span class="pill violet">✏️ 题目笔记</span><span class="pill blue">${TYPES[q.type] || q.type}</span>
           <span style="color:var(--muted);font-size:12px">${fmtDate(q.note_at)}</span><span style="flex:1"></span>
-          <button class="sm ghost" onclick="viewQuestion(${q.id})">题目详情</button>
-          <button class="sm ghost" data-qid="${q.id}" onclick="kbShowQuestion(+this.dataset.qid)">📖 看原题</button>
-          <button class="sm ghost" onclick="reviewQuestion(${q.id})" title="加入复习队列，可继续补笔记">🔁 复习</button></div>
+          <button class="ibtn sm" data-tip="题目详情" onclick="viewQuestion(${q.id})">ℹ️</button>
+          <button class="ibtn sm" data-tip="看原题" data-qid="${q.id}" onclick="kbShowQuestion(+this.dataset.qid)">📖</button>
+          <button class="ibtn sm" data-tip="加入复习队列，可继续补笔记" onclick="reviewQuestion(${q.id})">🔁</button></div>
         <div class="q-content" style="font-size:13.5px;color:var(--muted)">${esc(clipText(q.content, 120))}</div>
         <div class="q-note-show" style="margin-top:8px">📝 ${esc(qNote(q))}</div>
       </div>`).join('')}
@@ -4619,13 +4682,13 @@ function renderKPDetail(name) {
       <b>📕 关联错题（${mists.length}）</b> <span style="color:var(--muted);font-size:12px">与错题本双向联动：此处可复习错因与笔记</span>
       <div class="row" style="margin:8px 0">
         <button class="primary sm" onclick="practiceKPMist('${esc(name)}')">🔁 重练这些错题</button>
-        <button class="ghost sm" onclick="go('mist')">去错题本处理 →</button>
+        <button class="ibtn sm" data-tip="去错题本处理" onclick="go('mist')">📕</button>
       </div>
       ${mists.map(m => {
         const q = state.questions.find(x => x.id === m.question_id);
         return `<div class="q-item">
           <div class="q-head"><span class="pill red">${TYPES[m.type || q?.type] || '题目'}</span><span style="flex:1"></span>
-            <button class="sm ghost" onclick="go('mist')">在错题本中重答</button></div>
+            <button class="ibtn sm" data-tip="在错题本中重答" onclick="go('mist')">✍️</button></div>
           <div class="q-content">${esc(m.question_content || q?.content || '（原题已删除）')}</div>
           <div class="q-ans">
             <b style="color:var(--red)">你的答案：</b>${esc(m.user_answer || '')} ｜
@@ -4641,7 +4704,7 @@ function renderKPDetail(name) {
       <div class="q-head"><span class="pill blue">${TYPES[q.type]}</span><span class="pill gray">${DIFFS[q.difficulty] || ''}</span>
         ${impStarsHTML(q)}
         ${qNote(q) ? '<span class="pill violet">📝 有笔记</span>' : ''}
-        <button class="sm ghost" onclick="viewQuestion(${q.id})">详情</button></div>
+        <button class="ibtn sm" data-tip="题目详情" onclick="viewQuestion(${q.id})">ℹ️</button></div>
       <div class="q-content">${esc(q.content)}</div>
       <div class="q-ans"><b>答案：</b>${esc(q.answer)}</div>
       ${qNote(q) ? `<div class="q-note-show" style="margin-top:8px">📝 <b>我的笔记</b>：${esc(qNote(q))}</div>` : ''}
@@ -4893,10 +4956,10 @@ function kbNoteCard(n, i) {
     </div>
     <div class="kb-note-ft">
       <span>${fmtDate(n.at)}收藏</span><span style="flex:1"></span>
-      ${f.url ? `<button class="ghost" data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)">打开原文</button>` : ''}
-      ${f.kind === 'ai' ? `<button class="ghost" data-q="${esc(f.q || '')}" data-kp="${esc(f.kp || '')}" onclick="wsOpen(this.dataset.q, this.dataset.kp)" title="重新查一遍这个问题">🔍 再查</button>` : ''}
-      <button class="ghost" data-id="${esc(f.id)}" onclick="wsFavNote(this.dataset.id)" title="整理成知识库笔记（转出来后可编辑）">📝 转笔记</button>
-      <button class="ghost kpn-del" data-id="${esc(f.id)}" onclick="wsFavDel(this.dataset.id)" title="取消收藏">取消收藏</button>
+      ${f.url ? `<button class="ibtn sm" data-tip="打开原文" data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)">🔗</button>` : ''}
+      ${f.kind === 'ai' ? `<button class="ibtn sm" data-tip="重新查一遍这个问题" data-q="${esc(f.q || '')}" data-kp="${esc(f.kp || '')}" onclick="wsOpen(this.dataset.q, this.dataset.kp)">🔍</button>` : ''}
+      <button class="ibtn sm" data-tip="整理成知识库笔记（转出来后可编辑）" data-id="${esc(f.id)}" onclick="wsFavNote(this.dataset.id)">📝</button>
+      <button class="ibtn sm danger kpn-del" data-tip="取消收藏" data-id="${esc(f.id)}" onclick="wsFavDel(this.dataset.id)">★</button>
     </div>
   </div>`;
   }
@@ -4910,12 +4973,12 @@ function kbNoteCard(n, i) {
     </div>
     <div class="kb-note-ft">
       <span>${fmtDate(n.at)}</span><span style="flex:1"></span>
-      ${n.kind === 'mist' ? '<button class="ghost" onclick="go(\'mist\')">去错题本</button>' : ''}
-      ${n.kind === 'qn' ? `<button class="ghost" data-qid="${n.qid}" onclick="kbShowQuestion(+this.dataset.qid)" title="看这道题的题干、答案与解析">📖 看原题</button>` : ''}
-      ${kps[0] ? `<button class="ghost" onclick="goKPDetail('${esc(kps[0])}')">图谱定位</button>` : ''}
-      <button class="ghost" data-q="${esc(kps[0] || (n.content || '').slice(0, 20))}" data-kp="${esc(kps[0] || '')}" onclick="wsOpen(this.dataset.q, this.dataset.kp)" title="联网查这个知识点，可把结果存成新笔记">🔍 查</button>
-      <button class="ghost" onclick="kbEditNote('${esc(n.key)}')">✏️ 编辑</button>
-      <button class="ghost kpn-del" onclick="kbDeleteNote('${esc(n.key)}')">删除</button>
+      ${n.kind === 'mist' ? `<button class="ibtn sm" data-tip="去错题本处理" onclick="go(\'mist\')">📕</button>` : ''}
+      ${n.kind === 'qn' ? `<button class="ibtn sm" data-tip="看这道题的题干、答案与解析" data-qid="${n.qid}" onclick="kbShowQuestion(+this.dataset.qid)">📖</button>` : ''}
+      ${kps[0] ? `<button class="ibtn sm" data-tip="在知识点图谱里定位" onclick="goKPDetail('${esc(kps[0])}')">🎯</button>` : ''}
+      <button class="ibtn sm" data-tip="联网查这个知识点，结果可存成新笔记" data-q="${esc(kps[0] || (n.content || '').slice(0, 20))}" data-kp="${esc(kps[0] || '')}" onclick="wsOpen(this.dataset.q, this.dataset.kp)">🔍</button>
+      <button class="ibtn sm" data-tip="编辑这条笔记" onclick="kbEditNote('${esc(n.key)}')">✏️</button>
+      <button class="ibtn sm danger kpn-del" data-tip="删除这条笔记" onclick="kbDeleteNote('${esc(n.key)}')">🗑</button>
     </div>
   </div>`;
 }
@@ -4946,10 +5009,9 @@ function kbShowQuestion(qid) {
       <span class="pill blue">${esc(TYPES[q.type] || q.type || '题目')}</span>
       ${q.knowledge_point ? `<span class="pill gray">🧠 ${esc(q.knowledge_point)}</span>` : ''}
       ${q.difficulty ? `<span class="pill gray">难度 ${esc(String(q.difficulty))}</span>` : ''}
-      ${impStarsHTML(q)}
+      ${impStarsHTML(q)}${scorePillHTML(q)}
     </div>
-    <div style="font-size:17px;line-height:1.7">${esc(q.content || '')}</div>
-    ${opts ? `<div style="margin-top:10px">${opts}</div>` : ''}
+    <div style="font-size:17px;line-height:1.7">${esc(q.content || '')}</div>    ${opts ? `<div style="margin-top:10px">${opts}</div>` : ''}
     <div class="q-ans" style="margin-top:12px"><b>答案：</b>${esc(q.answer || '')}${q.explanation ? `<br><b style="color:var(--muted)">解析：</b>${esc(q.explanation)}` : ''}</div>
     ${qNote(q) ? `<div class="q-note-show" style="margin-top:12px">📝 <b>我的笔记</b>：${esc(qNote(q))}</div>` : ''}
     <div class="row" style="justify-content:flex-end;margin-top:14px">
@@ -4999,8 +5061,8 @@ function viewKB() {
         ${kpOptions.map(k => `<option value="${esc(k)}" ${kbFilter.kp === k ? 'selected' : ''}>${esc(k)}</option>`).join('')}
       </select>` : ''}
       <button class="primary" onclick="kbNewNote()">＋ 新建笔记</button>
-      <button class="ghost" onclick="wsOpen()" title="联网查询不懂的知识点，结果可存成笔记">🔍 联网查询</button>
-      <button class="ghost" onclick="go('kp')">🧠 知识点图谱</button>
+      <button class="ibtn" data-tip="联网查询不懂的知识点，结果可存成笔记" onclick="wsOpen()">🔍</button>
+      <button class="ibtn" data-tip="打开知识点图谱" onclick="go('kp')">🧠</button>
     </div>
     <div class="row"><span class="kb-kinds" id="kbKindBox">${kbKindChipsHTML()}</span>
       <span style="flex:1"></span><span id="kbCount" style="color:var(--muted);font-size:12px">当前显示 ${all.length} / ${all.length} 条</span></div>
@@ -5008,8 +5070,8 @@ function viewKB() {
   <div class="card">
     <h3>🧠 笔记与图谱联动 <span class="pill blue" style="font-weight:600">覆盖 ${s.covered} / ${s.graphTotal} 个知识点</span>
       <span style="flex:1"></span>
-      <button class="sm primary" onclick="kbOpenGraph()">📝 只看有笔记的知识点</button>
-      <button class="sm ghost" onclick="go('kp')">打开完整图谱</button></h3>
+      <button class="ibtn sm on" data-tip="只看有笔记的知识点" onclick="kbOpenGraph()">📝</button>
+      <button class="ibtn sm" data-tip="打开完整图谱" onclick="go('kp')">🧠</button></h3>
     <div class="kb-cover"><i style="width:${pct}%"></i></div>
     <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:12px">
       ${topKP.length ? topKP.map(([k, n]) => `<span class="pill amber" style="cursor:pointer" title="在图谱中定位" onclick="goKPDetail('${esc(k)}')">${esc(k)} · ${n} 条</span>`).join('')
@@ -5502,10 +5564,10 @@ function wsRenderResults() {
       <div class="ws-res-u">${esc(r.site || '')}${r.site ? ' · ' : ''}${esc(String(r.url).slice(0, 90))}</div>
       <div class="ws-res-s">${esc(r.snippet || '（该页面没有摘要，点标题打开查看）')}</div>
       <div class="ws-res-ft">
-        <button class="ghost" data-u="${esc(r.url)}" onclick="wsOpenLink(this.dataset.u)">打开原文</button>
-        <button class="ghost" data-u="${esc(r.url)}" onclick="wsCopy(this.dataset.u)">复制链接</button>
-        <button class="ghost" data-i="${i}" onclick="wsUseAsNote(+this.dataset.i)" title="把这条结果的标题、摘要和链接存成笔记">💾 存这条</button>
-        <button class="ghost" data-i="${i}" onclick="wsFavAddResult(+this.dataset.i)" title="收进收藏夹，随时回看">⭐ 收藏</button>
+        <button class="ibtn sm" data-tip="用浏览器打开原文" data-u="${esc(r.url)}" onclick="wsOpenLink(this.dataset.u)">🔗</button>
+        <button class="ibtn sm" data-tip="复制链接" data-u="${esc(r.url)}" onclick="wsCopy(this.dataset.u)">⧉</button>
+        <button class="ibtn sm" data-tip="把这条结果的标题、摘要和链接存成笔记" data-i="${i}" onclick="wsUseAsNote(+this.dataset.i)">💾</button>
+        <button class="ibtn sm" data-tip="收进收藏夹，随时回看" data-i="${i}" onclick="wsFavAddResult(+this.dataset.i)">⭐</button>
       </div>
     </div>`).join('');
 }
@@ -5802,9 +5864,9 @@ function wsFavRender() {
         <span class="t" ${f.url ? `data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)" title="${esc(f.url)}"` : ''} style="${f.url ? 'cursor:pointer' : ''}">${f.kind === 'ai' ? '🤖 ' : '🌐 '}${esc(f.title || f.q || '（无标题）')}</span>
         <span class="d">${fmtDate(f.at)}</span>
         <span class="op">
-          ${f.url ? `<button class="ghost" data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)">打开</button>` : ''}
-          <button class="ghost" data-id="${f.id}" onclick="wsFavNote(this.dataset.id)" title="整理成笔记存进知识库">转笔记</button>
-          <button class="ghost" data-id="${f.id}" onclick="wsFavDel(this.dataset.id)" title="从收藏夹删除">✕</button>
+          ${f.url ? `<button class="ibtn sm" data-tip="打开原文" data-u="${esc(f.url)}" onclick="wsOpenLink(this.dataset.u)">🔗</button>` : ''}
+          <button class="ibtn sm" data-tip="整理成笔记存进知识库" data-id="${f.id}" onclick="wsFavNote(this.dataset.id)">📝</button>
+          <button class="ibtn sm danger" data-tip="从收藏夹删除" data-id="${f.id}" onclick="wsFavDel(this.dataset.id)">✕</button>
         </span>
       </div>`).join('')
       : '<div class="ws-empty">收藏夹还是空的 —— 网页结果卡上的「⭐ 收藏」、AI 解答旁的「⭐ 收藏回答」都能收进来</div>');
@@ -5991,7 +6053,7 @@ function renderRevCard() {
       ${card.reps ? `<span class="pill gray">第 ${card.reps} 轮</span>` : ''}
       ${card.lapses ? `<span class="pill amber">遗忘 ${card.lapses} 次</span>` : ''}
       ${qNote(q) ? `<span class="pill amber" title="这道题已写过笔记，在题目上方可继续修改">📝 已记笔记</span>` : ''}
-      ${impStarsHTML(q)}
+      ${impStarsHTML(q)}${scorePillHTML(q)}
     </div>
     <div class="rev-q">${esc(q.content)}</div>
     <div id="revAnsWrap" class="${mode === 'answer' ? '' : 'hidden'}" style="width:100%;text-align:left;margin-top:6px">
@@ -6157,8 +6219,8 @@ function renderRevResult() {
   </div>
   <div class="row">
     <button class="primary" onclick="startTodayReview()">🔁 再复习一轮</button>
-    <button class="ghost" onclick="viewReview()">返回复习面板</button>
-    <button class="ghost" onclick="go('practice')">去答题练习</button>
+    <button class="ibtn" data-tip="返回复习面板" onclick="viewReview()">←</button>
+    <button class="ibtn" data-tip="去答题练习" onclick="go('practice')">✍️</button>
   </div>`;
   rev = null;
   refreshData();
@@ -6251,8 +6313,8 @@ async function viewReview() {
     </div>
     <div class="row">
       <button class="primary" onclick="startTodayReview()">▶ 开始今日复习（${q0.due + q0.fresh} 张）</button>
-      <button class="ghost" onclick="reviewDueOnly()">只复习到期卡</button>
-      <button class="ghost" onclick="addAllMistakes()">📕 把错题全部加入复习</button>
+      <button class="ibtn" data-tip="只复习到期卡（不做新卡）" onclick="reviewDueOnly()">⏰</button>
+      <button class="ibtn" data-tip="把错题全部加入复习" onclick="addAllMistakes()">📕</button>
     </div>` : '<div class="empty">今日任务已完成 🎉<br><span style="font-size:13px">明天再来，或到下方「卡片管理」手动添加新卡片</span></div>'}
   </div>
   <div class="grid c2">
@@ -6301,14 +6363,14 @@ async function viewReview() {
         <td style="font-size:12px;color:var(--muted)">${ivlLabel(c.interval)}</td>
         <td style="font-size:12px;color:var(--muted)">${c.reps || 0}</td>
         <td style="text-align:right"><span class="row" style="justify-content:flex-end">
-          <button class="sm primary" onclick="reviewNow(${c.id})">立刻复习</button>
-          <button class="sm ghost" onclick="toggleRevAns(${c.id})">✍️ 答题</button>
-          <button class="sm ghost" onclick="resetCard(${c.id})">重置</button>
-          <button class="sm danger" onclick="delCard(${c.id})">移除</button></span></td>
+          <button class="ibtn sm on" data-tip="立刻复习这张卡" onclick="reviewNow(${c.id})">▶</button>
+          <button class="ibtn sm" data-tip="就地答题" onclick="toggleRevAns(${c.id})">✍️</button>
+          <button class="ibtn sm" data-tip="重置复习进度" onclick="resetCard(${c.id})">⟲</button>
+          <button class="ibtn sm danger" data-tip="移出复习队列" onclick="delCard(${c.id})">🗑</button></span></td>
       </tr>
       <tr id="rvrow-${c.id}" class="hidden"><td colspan="6" style="background:var(--bg)"><div class="mist-ans" id="rv-${c.id}" style="margin-top:0">
         ${qNoteHTML(q, 'rv' + c.id)}
-        <div class="row" style="margin-bottom:8px;flex-wrap:wrap">${impStarsHTML(q)}<span style="color:var(--muted);font-size:12px">点击星级标记重要程度</span></div>
+        <div class="row" style="margin-bottom:8px;flex-wrap:wrap">${impStarsHTML(q)}${scorePillHTML(q)}<span style="color:var(--muted);font-size:12px">点击星级标记重要程度</span></div>
         <div style="color:var(--muted);font-size:12px;margin-bottom:8px">${esc(q?.content || '')}</div>
         <div id="rv-input-${c.id}">${revAnsInput(q, c.id)}</div>
         <div class="row" style="margin-top:10px">
@@ -6593,7 +6655,7 @@ function renderQuiz() {
   <div class="q-item">
     ${qNoteHTML(it, 'quiz' + it.id)}
     <div class="q-head"><span class="pill blue">${TYPES[it.type]}</span><span class="pill gray">${DIFFS[it.difficulty] || it.difficulty}</span>
-      ${it.knowledge_point ? `<span class="pill amber">${esc(it.knowledge_point)}</span>` : ''}${impStarsHTML(it)}</div>
+      ${it.knowledge_point ? `<span class="pill amber">${esc(it.knowledge_point)}</span>` : ''}${impStarsHTML(it)}${scorePillHTML(it)}</div>
     <div class="q-content" style="font-size:16px">${esc(it.content)}</div>
     <div style="margin-top:10px" id="answerArea">
       ${renderAnswerInput(it, saved)}
@@ -6818,7 +6880,76 @@ function renderQuizResult() {
 /* ============ 模拟考试 ============ */
 let exam = null, examTimer = null;
 const DEFAULT_SCORE = { single_choice: 3, multiple_choice: 5, true_false: 2, fill_blank: 4, short_answer: 8 };
-let examCfgScore = { ...DEFAULT_SCORE };
+/* v1.49.0：题型分值（每题）改为全局持久化配置——存 state.settings.typeScores，
+ * 未配置的题型回退 DEFAULT_SCORE，自定义题型默认 5 分。
+ * 同一题型的所有题目共用该分值：考试判分、组卷导出、题库/练习显示都用 typeScoreOf() 取值。 */
+function typeScoreOf(type) {
+  const s = (state.settings && state.settings.typeScores) || {};
+  if (s[type] != null && s[type] !== '') return Math.max(0, Math.min(50, +s[type] || 0));
+  if (DEFAULT_SCORE[type] != null) return DEFAULT_SCORE[type];
+  return 5;
+}
+/* v1.49.0：题型说明——每种题型一段答题要求，显示在试卷/预览的每个题型开头（大题标题下方），
+ * 存 state.settings.typeNotes，未自定义的题型回退下面这套默认文案。
+ * 文案里的占位符在渲染时替换：{n}=本大题小题数  {score}=每题分值  {total}=本大题总分 */
+const DEFAULT_TYPE_NOTE = {
+  single_choice: '本大题共 {n} 小题，每小题 {score} 分，共 {total} 分。每题只有一个正确答案，多选、错选或不选均不得分。请将答案填写在题后括号内。',
+  multiple_choice: '本大题共 {n} 小题，每小题 {score} 分，共 {total} 分。每题有两个或以上正确答案，多选、少选、错选均不得分。请将答案填写在题后括号内。',
+  true_false: '本大题共 {n} 小题，每小题 {score} 分，共 {total} 分。判断正误，正确的划「√」，错误的划「×」，请将判断结果填写在题后括号内。',
+  fill_blank: '本大题共 {n} 小题，每小题 {score} 分，共 {total} 分。请将答案直接填写在题目横线上，按空给分。',
+  short_answer: '本大题共 {n} 小题，每小题 {score} 分，共 {total} 分。写清关键要点即可，按要点分档给分，请将答案写在题目下方空白处。',
+};
+/** 取某题型的说明文案模板（未配置回退默认） */
+function typeNoteOf(type) {
+  const m = (state.settings && state.settings.typeNotes) || {};
+  const v = m[type];
+  if (v != null && String(v).trim() !== '') return String(v);
+  return DEFAULT_TYPE_NOTE[type] || '本大题共 {n} 小题，每小题 {score} 分，共 {total} 分。按题目要求作答，答案完整、表述准确即可得分。';
+}
+/** 按本大题实际情况渲染说明文字（替换 {n}/{score}/{total} 占位符） */
+function renderTypeNote(type, n, score) {
+  const tpl = typeNoteOf(type);
+  return tpl
+    .replace(/\{n\}/g, String(n == null ? 0 : n))
+    .replace(/\{score\}/g, String(score == null ? 0 : score))
+    .replace(/\{total\}/g, String((n || 0) * (score || 0)))
+    .trim();
+}
+/** 设置某题型说明并持久化 */
+async function setTypeNote(type, txt) {
+  const t = String(txt == null ? '' : txt).slice(0, 200);
+  state.settings.typeNotes = { ...(state.settings.typeNotes || {}), [type]: t };
+  try {
+    if (await DB.kvSet('settings', state.settings) === DB_TIMEOUT) throw new Error('写入超时');
+  } catch (e) { toast('题型说明保存失败：' + e.message, 'err'); return false; }
+  return true;
+}
+/** 设置某题型每题分值并持久化；同步考试页输入框与页面上所有分值胶囊 */
+async function setTypeScore(type, n) {
+  n = Math.max(0, Math.min(50, +n || 0));
+  state.settings.typeScores = { ...(state.settings.typeScores || {}), [type]: n };
+  const el = $(`#exScore input[data-k="${type}"]`);
+  if (el) el.value = n;
+  try {
+    if (await DB.kvSet('settings', state.settings) === DB_TIMEOUT) throw new Error('写入超时');
+  } catch (e) { toast('分值保存失败：' + e.message, 'err'); return; }
+  refreshScorePills();
+}
+/** 就地刷新页面上所有「X 分」胶囊（不重绘整页，保住滚动位置） */
+function refreshScorePills() {
+  document.querySelectorAll('[data-score-pill]').forEach(el => {
+    const q = state.questions.find(x => x.id === +el.dataset.scorePill);
+    if (q) el.textContent = typeScoreOf(q.type) + ' 分';
+  });
+  document.querySelectorAll('[data-score-type]').forEach(el => {
+    el.textContent = typeScoreOf(el.dataset.scoreType) + ' 分';
+  });
+}
+/** 题目分值胶囊（只读展示，按题型取值；改分值去系统设置） */
+function scorePillHTML(q) {
+  const n = typeScoreOf(q.type);
+  return `<span class="pill blue" data-score-pill="${q.id}" title="按题型分值：${TYPES[q.type] || q.type} 每题 ${n} 分（可在「系统设置 → 题型分值」统一调整）">${n} 分</span>`;
+}
 /* 组卷条件（题型/难度选择）：考试与组卷导出共用，保证导出的就是这套题 */
 let examPickedTypes = new Set(), examPickedDiffs = new Set();
 
@@ -7030,7 +7161,7 @@ function examPickCached(cfg) {
 /** 按条件挑卷（对外接口不变，返回题目数组） */
 function pickExamItems(cfg) { return examPickCached(cfg).items; }
 function examTotalScore(items) {
-  return items.reduce((s, q) => s + (examCfgScore[q.type] ?? (isCustomType(q.type) ? 5 : 0)), 0);
+  return items.reduce((s, q) => s + typeScoreOf(q.type), 0);
 }
 async function viewExam() {
   if (exam && !exam.finished) { renderExam(); return; }
@@ -7071,7 +7202,7 @@ async function viewExam() {
     <label class="f"><span>各题型分值（每题）</span>
       <div class="row" id="exScore">
         ${Object.entries(TYPES).map(([k, v]) => `<span style="display:flex;align-items:center;gap:6px;font-size:13px">
-          ${v}<input type="number" min="1" max="50" value="${examCfgScore[k] ?? 5}" data-k="${k}" style="width:66px;padding:4px 8px"></span>`).join('')}
+          ${v}<input type="number" min="0" max="50" value="${typeScoreOf(k)}" data-k="${k}" style="width:66px;padding:4px 8px"></span>`).join('')}
       </div></label>
     <div class="row" style="margin-top:6px">
       <button class="primary" id="exStart">▶ 开始考试</button>
@@ -7092,7 +7223,7 @@ async function viewExam() {
     </div>
     <div class="row">
       <button class="primary" id="pkBtn">📤 生成并导出</button>
-      <button class="ghost" id="pkPrev">👁 预览试卷</button>
+      <button class="ibtn" id="pkPrev" data-tip="预览试卷（新窗口）">👁</button>
       <span class="pill gray" id="pkInfo">按当前条件组卷</span>
     </div>
     ${IS_DESKTOP ? '' : '<p style="color:var(--amber);font-size:12px;margin-top:8px">网页版导出的是 HTML 试卷，用浏览器打开后「打印 → 另存为 PDF」即可得到 PDF。</p>'}
@@ -7106,9 +7237,9 @@ async function viewExam() {
           <td><b style="color:${rate >= 80 ? 'var(--green)' : rate >= 60 ? 'var(--amber)' : 'var(--red)'}">${e.obtained} / ${e.total}</b></td>
           <td>${rate}%</td><td>${e.duration_sec ? Math.round(e.duration_sec / 60) + ' 分钟' : '—'}</td>
           <td style="text-align:right"><div class="row" style="justify-content:flex-end">
-            <button class="sm ghost" onclick="viewExamReport(${e.id})">查看报告</button>
-            <button class="sm ghost" onclick="exportExamReport(${e.id})">导出</button>
-            <button class="sm danger" onclick="delExam(${e.id})">删除</button></div></td></tr>`;
+            <button class="ibtn sm" data-tip="查看考试报告" onclick="viewExamReport(${e.id})">📊</button>
+            <button class="ibtn sm" data-tip="导出考试报告" onclick="exportExamReport(${e.id})">📤</button>
+            <button class="ibtn sm danger" data-tip="删除这条考试记录" onclick="delExam(${e.id})">🗑</button></div></td></tr>`;
       }).join('')}</table>` : '<div class="empty">还没有考试记录</div>'}
   </div>`;
   if (!canStart) return;
@@ -7123,8 +7254,14 @@ async function viewExam() {
     pickedD.has(t.dataset.k) ? pickedD.delete(t.dataset.k) : pickedD.add(t.dataset.k);
     t.classList.toggle('on', pickedD.has(t.dataset.k)); updPreview();
   });
+  /* v1.49.0：题型分值持久化——输入即写 settings（防抖），预览总分同步刷新 */
+  let scoreTimer = null;
   const readScore = () => {
-    $('#exScore').querySelectorAll('input').forEach(i => { examCfgScore[i.dataset.k] = Math.max(0, +i.value || 0); });
+    const ts = { ...(state.settings.typeScores || {}) };
+    $('#exScore').querySelectorAll('input').forEach(i => { ts[i.dataset.k] = Math.max(0, Math.min(50, +i.value || 0)); });
+    state.settings.typeScores = ts;
+    clearTimeout(scoreTimer);
+    scoreTimer = setTimeout(() => { DB.kvSet('settings', state.settings).then(() => refreshScorePills()).catch(() => {}); }, 500);
   };
   const curCfg = () => ({
     docId: $('#exDoc').value, kp: $('#exKp').value,
@@ -7241,7 +7378,7 @@ function renderExam() {
   </div>
   <div class="q-item">
     <div class="q-head"><span class="pill blue">${TYPES[it.type]}</span><span class="pill gray">${DIFFS[it.difficulty] || it.difficulty}</span>
-      <span class="pill amber">${examCfgScore[it.type] ?? (isCustomType(it.type) ? 5 : 0)} 分</span>
+      <span class="pill amber" data-score-type="${it.type}">${typeScoreOf(it.type)} 分</span>
       ${it.knowledge_point ? `<span class="pill gray">${esc(it.knowledge_point)}</span>` : ''}</div>
     <div class="q-content" style="font-size:16px">${esc(it.content)}</div>
     <div style="margin-top:10px" id="examAnswerArea">${renderExamInput(it, savedIns)}</div>
@@ -7351,7 +7488,7 @@ async function submitExam(auto) {
       if (btn) btn.textContent = `判分中 ${i + 1}/${items.length}`;   // 进度可见，避免误以为卡死
       const q = items[i];
       const user = exam.answers[q.id] ?? '';
-      const max = examCfgScore[q.type] ?? (isCustomType(q.type) ? 5 : 0);
+      const max = typeScoreOf(q.type);
       let correct = false, note = '';
       if (q.type === 'short_answer' || (q.type === 'fill_blank' && /[\u4e00-\u9fa5]{4,}/.test(q.answer))) {
         if (useAI) {
@@ -7383,7 +7520,7 @@ async function submitExam(auto) {
         ...(exam.cfg || {}),
         types: [...(((exam.cfg || {}).types) || [])],
         diffs: [...(((exam.cfg || {}).diffs) || [])],
-        score: { ...examCfgScore },
+        score: Object.fromEntries(Object.keys(TYPES).map(t => [t, typeScoreOf(t)])),   // 当次题型分值快照
       },
       results, obtained, total, auto_submit: auto ? 1 : 0,
     };
@@ -7503,7 +7640,7 @@ const GROUP_TITLE = {
   true_false: '判断题', fill_blank: '填空题', short_answer: '简答题',
 };
 const CN_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
-function paperScoreOf(q) { return examCfgScore[q.type] ?? (isCustomType(q.type) ? 5 : 0); }
+function paperScoreOf(q) { return typeScoreOf(q.type); }
 /** 按题型分组、连续编号、算总分 */
 function buildPaper(items, cfg) {
   const groups = [];
@@ -7538,8 +7675,10 @@ function paperBlocks(paper, kind) {
   b.push({ k: 'info', t: '姓名：____________　　班级：____________　　学号：____________' });
   b.push({ k: 'rule' });
   paper.groups.forEach((g, gi) => {
-    const per = g.score ? `（每小题 ${g.score} 分，共 ${g.score * g.items.length} 分）` : '';
-    b.push({ k: 'sec', t: `${CN_NUM[gi] || (gi + 1)}、${g.title}${per}` });
+    b.push({ k: 'sec', t: `${CN_NUM[gi] || (gi + 1)}、${g.title}` });
+    /* v1.49.0：题型说明——每个题型开头一行（含本大题题数、每题分值、总分） */
+    const note = renderTypeNote(g.type, g.items.length, g.score);
+    if (note) b.push({ k: 'secnote', t: note });
     for (const q of g.items) {
       // 判断题不列选项，题干后直接跟作答括号
       const tail = q.type === 'true_false' ? '（　　）' : '';
@@ -7570,6 +7709,7 @@ function blockHTML(b) {
     case 'info': return `<div class="info">${esc(b.t)}</div>`;
     case 'rule': return '<div class="rule"></div>';
     case 'sec': return `<div class="sec">${esc(b.t)}</div>`;
+    case 'secnote': return `<div class="secnote">${esc(b.t)}</div>`;
     case 'q': return `<div class="q">${b.no}. ${esc(b.t)}${esc(b.tail || '')}${b.score ? `<span class="sc">（${b.score}分）</span>` : ''}</div>`;
     case 'opts': return b.inline
       ? `<div class="opts-in">${b.arr.map(o => `<span>${esc(o)}</span>`).join('')}</div>`
@@ -7596,6 +7736,7 @@ h1{font-size:${A3 ? '17pt' : '16pt'};text-align:center;font-weight:700;margin:0 
 .rule{border-top:1.5px solid #000;margin:2px 0 10px}
 .paper{${A3 ? 'column-count:2;column-gap:16mm' : ''}}
 .sec{font-weight:700;margin:10px 0 4px;break-after:avoid}
+.secnote{font-size:10.5pt;color:#444;margin:0 0 5px;break-after:avoid}
 .q{margin:0 0 3px;text-align:justify;break-inside:avoid}
 .sc{color:#555;font-size:10.5pt}
 .opts-in{display:flex;flex-wrap:wrap;gap:0 2em;margin:1px 0 5px;padding-left:1.6em}
@@ -7737,9 +7878,9 @@ async function viewMist() {
     ${subjects.length ? `<select id="mSubj" style="width:auto;min-width:118px">${subjectOptionsHTML(mistFilter.subj, '全部科目')}</select>` : ''}
     <select id="mFilter" style="width:auto"><option value="">全部题型</option>
       ${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${mistFilter.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
-    <button class="ghost" onclick="delSelectedMist()" id="delMistBtn" disabled>删除所选 (0)</button>
-    <button class="ghost" onclick="exportMist()">📤 导出错题 Word</button>
-    <button class="danger" onclick="clearMist()">清空错题本</button>
+    <button class="ibtn danger" onclick="delSelectedMist()" id="delMistBtn" disabled data-tip="删除所选（先勾选错题）">🗑<span class="ibtn-badge"></span></button>
+    <button class="ibtn" data-tip="导出错题 Word" onclick="exportMist()">📤</button>
+    <button class="ibtn danger" data-tip="清空错题本" onclick="clearMist()">🧹</button>
   </div></div>
   ${mist.length ? mist.map(m => {
     const q = state.questions.find(x => x.id === m.question_id);
@@ -7752,11 +7893,11 @@ async function viewMist() {
         <span class="pill gray">${DIFFS[m.difficulty || q?.difficulty] || ''}</span>
         ${q?.knowledge_point ? `<span class="pill blue" style="cursor:pointer" title="在知识点图谱中查看" onclick="goKPDetail('${esc(q.knowledge_point)}')">🔍 ${esc(q.knowledge_point)}</span>` : ''}
         <span style="flex:1"></span>
-        <button class="sm ghost" onclick="toggleMistAns(${m.id})">✍️ 再答一次</button>
-        <button class="sm ghost" onclick="toggleMistNote(${m.id})">📝 笔记</button>
-        <button class="sm ghost" onclick="toggleFav(${m.id})">${m.is_favorite ? '⭐ 已收藏' : '☆ 收藏'}</button>
-        <button class="sm ghost" onclick="reviewQuestion(${m.question_id})">🔁 复习</button>
-        <button class="sm danger" onclick="delMist(${m.id})">删除</button></div>
+        <button class="ibtn sm" data-tip="再答一次" onclick="toggleMistAns(${m.id})">✍️</button>
+        <button class="ibtn sm" data-tip="我的笔记" onclick="toggleMistNote(${m.id})">📝</button>
+        <button class="ibtn sm ${m.is_favorite ? 'on' : ''}" data-tip="${m.is_favorite ? '取消收藏' : '收藏这道错题'}" onclick="toggleFav(${m.id})">${m.is_favorite ? '⭐' : '☆'}</button>
+        <button class="ibtn sm" data-tip="加入复习" onclick="reviewQuestion(${m.question_id})">🔁</button>
+        <button class="ibtn sm danger" data-tip="移出错题本" onclick="delMist(${m.id})">🗑</button></div>
       <div class="q-content">${esc(content)}</div>
       <div class="q-ans">
         <b style="color:var(--red)">你的答案：</b>${esc(m.user_answer || '')} ｜
@@ -7786,7 +7927,10 @@ async function viewMist() {
     const id = +e.target.dataset.id;
     e.target.checked ? mistSel.add(id) : mistSel.delete(id);
     const btn = $('#delMistBtn');
-    btn.disabled = !mistSel.size; btn.textContent = `删除所选 (${mistSel.size})`;
+    btn.disabled = !mistSel.size;
+    const badge = btn.querySelector('.ibtn-badge');
+    if (badge) { badge.textContent = mistSel.size || ''; badge.style.display = mistSel.size ? 'flex' : 'none'; }
+    btn.dataset.tip = mistSel.size ? `删除所选（${mistSel.size} 条）` : '删除所选（先勾选错题）';
   });
 }
 let mistFilter = { type: '', subj: '' }, mistSel = new Set();
@@ -8275,6 +8419,27 @@ async function viewSet() {
       <option value="0" ${s.autoRemove === 0 ? 'selected' : ''}>始终保留，手动移除</option></select></label>
   </div>
   ${subjectManagerCard()}
+  <div class="card"><h3>📊 题型分值与说明</h3>
+    <p style="color:var(--muted);font-size:12px;margin:0 0 10px;line-height:1.8">
+      ① <b>分值</b>按题型统一设置每题分值，同一题型共用：用于模拟考试判分与成绩核算、组卷导出试卷标分，题库管理和答题练习里也会显示每题分值。
+      未改过的题型用默认值（单选 3 / 多选 5 / 判断 2 / 填空 4 / 简答 8），自定义题型默认 5 分；填 0 表示该题型不计分。<br>
+      ② <b>说明</b>是该题型的答题要求，显示在<b>组卷导出的试卷</b>里每个题型开头（大题标题下方），如「本大题共 5 小题，每小题 3 分，共 15 分。每题只有一个正确答案……」。
+      可用占位符 <b>{n}</b> 小题数、<b>{score}</b> 每题分值、<b>{total}</b> 本大题总分，渲染时自动替换；留空则用默认文案。</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${Object.entries(TYPES).map(([k, v]) => `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="width:76px;font-size:13px;font-weight:600;flex:none">${esc(v)}</span>
+        <input type="number" min="0" max="50" value="${typeScoreOf(k)}" data-ttype="${k}" style="width:64px;padding:4px 8px;flex:none">
+        <span style="font-size:12px;color:var(--muted);flex:none">分/题</span>
+        <input type="text" maxlength="200" data-tnote="${k}" value="${esc(typeNoteOf(k))}"
+               placeholder="本题型开头那句说明，可用 {n}/{score}/{total}" style="flex:1;min-width:240px;padding:4px 8px;font-size:12.5px">
+      </div>`).join('')}
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" id="sScoreReset">恢复默认分值</button>
+      <button class="ghost" id="sNoteReset">恢复默认说明</button>
+      <span style="color:var(--muted);font-size:12px" id="sScoreTip">修改后立即保存，题库、练习、考试、组卷同步生效</span>
+    </div>
+  </div>
   <div class="card"><h3>🧩 题目类型管理</h3>
     <div class="row" style="flex-wrap:wrap;margin-bottom:10px">
       ${Object.entries(TYPES).map(([k, v]) => `<span class="pill ${isCustomType(k) ? 'blue' : 'gray'}">${esc(v)}${isCustomType(k) ? ` <b style="cursor:pointer" onclick="delCustomType('${k}')" title="删除此自定义题型">✕</b>` : '（内置）'}</span>`).join('')}
@@ -8323,15 +8488,15 @@ async function viewSet() {
   </div>` : ''}
   <div class="card"><h3>💾 数据管理</h3>
     <div class="row">
-      <button class="ghost" onclick="qTplExport()">📤 导出出题模板</button>
-      <button class="ghost" id="sBackup">${IS_DESKTOP ? '导出当前题库（JSON 备份）' : '导出全部数据（JSON 备份）'}</button>
-      <button class="ghost" id="sRestore">导入备份</button>
-      <button class="danger" id="sReset">${IS_DESKTOP ? '清空当前题库数据' : '清空全部数据'}</button>
+      <button class="ibtn" data-tip="导出出题模板（Word / Excel 空白录入表）" onclick="qTplExport()">📤</button>
+      <button class="ibtn" id="sBackup" data-tip="${IS_DESKTOP ? '导出当前题库（JSON 备份）' : '导出全部数据（JSON 备份）'}">💾</button>
+      <button class="ibtn" id="sRestore" data-tip="导入备份（.json）">📥</button>
+      <button class="ibtn danger" id="sReset" data-tip="${IS_DESKTOP ? '清空当前题库数据' : '清空全部数据'}">🧨</button>
       <input type="file" id="restoreIn" accept=".json" class="hidden">
     </div>
     ${IS_DESKTOP ? `<div class="row" style="margin-top:8px">
-      <button class="ghost" onclick="fullExport()">📦 导出全部数据（含所有题库）</button>
-      <button class="ghost" onclick="fullRestore()">♻️ 从全量备份恢复…</button>
+      <button class="ibtn" data-tip="导出全部数据（含所有题库）" onclick="fullExport()">📦</button>
+      <button class="ibtn" data-tip="从全量备份恢复…" onclick="fullRestore()">♻️</button>
       <span style="color:var(--muted);font-size:12px">换机迁移 / 整目录备份用；不含 API Key，恢复前会自动留存当前数据</span>
     </div>` : ''}
     ${IS_DESKTOP ? `<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)">
@@ -8340,8 +8505,8 @@ async function viewSet() {
           <code id="sDataPath" style="font-size:12px;word-break:break-all;flex:1">读取中…</code>
         </div>
         <div class="row" style="margin-top:8px">
-          <button class="ghost" onclick="changeDataPath()">📂 修改数据文件路径…</button>
-          <button class="ghost" onclick="resetDataPath()">↩ 恢复默认位置</button>
+          <button class="ibtn" data-tip="修改数据文件路径…" onclick="changeDataPath()">📂</button>
+          <button class="ibtn" data-tip="恢复默认数据位置" onclick="resetDataPath()">↩</button>
           ${IS_DESKTOP ? '<button class="ghost" onclick="window.electronAPI && window.electronAPI.openBackupDir()">🗂 打开自动备份目录</button>' : ''}
           <span style="color:var(--muted);font-size:12px">可迁移到同步盘 / 移动硬盘，实现多机同步</span>
         </div>
@@ -8369,6 +8534,42 @@ async function viewSet() {
   }
   /* 科目管理（与「文档管理」页共用同一份数据与同一套交互） */
   bindSubjectManager();
+  /* v1.49.0 题型分值：输入即存（onchange），保存后就地提示 */
+  document.querySelectorAll('#view input[data-ttype]').forEach(inp => {
+    inp.onchange = async () => {
+      const n = Math.max(0, Math.min(50, +inp.value || 0));
+      inp.value = n;
+      await setTypeScore(inp.dataset.ttype, n);
+      const tip = $('#sScoreTip');
+      if (tip) tip.textContent = `已保存：${TYPES[inp.dataset.ttype]} 每题 ${n} 分`;
+    };
+  });
+  const scoreReset = $('#sScoreReset');
+  if (scoreReset) scoreReset.onclick = async () => {
+    if (!confirm('把所有题型分值恢复为默认值？（单选 3 / 多选 5 / 判断 2 / 填空 4 / 简答 8，自定义题型 5 分）')) return;
+    state.settings.typeScores = {};
+    try { await DB.kvSet('settings', state.settings); } catch (e) { toast('保存失败：' + e.message, 'err'); return; }
+    viewSet(); toast('题型分值已恢复默认', 'ok');
+  };
+  /* v1.49.0 题型说明：失焦/回车即存 */
+  document.querySelectorAll('#view input[data-tnote]').forEach(inp => {
+    const save = async () => {
+      const ok = await setTypeNote(inp.dataset.tnote, inp.value);
+      if (!ok) return;
+      inp.value = typeNoteOf(inp.dataset.tnote);
+      const tip = $('#sScoreTip');
+      if (tip) tip.textContent = `已保存：${TYPES[inp.dataset.tnote]} 的题型说明`;
+    };
+    inp.onchange = save;
+    inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } };
+  });
+  const noteReset = $('#sNoteReset');
+  if (noteReset) noteReset.onclick = async () => {
+    if (!confirm('把所有题型说明恢复为默认文案？自定义的说明会被清空。')) return;
+    state.settings.typeNotes = {};
+    try { await DB.kvSet('settings', state.settings); } catch (e) { toast('保存失败：' + e.message, 'err'); return; }
+    viewSet(); toast('题型说明已恢复默认', 'ok');
+  };
   /* AI 服务商 ↔ 模型 ↔ Base URL 三联动 */
   renderAiPresetUI(s);
   $('#sProvider').onchange = () => {
@@ -8505,9 +8706,9 @@ async function renderBankMgr() {
         <span style="color:var(--muted);font-size:12px">　${c.questions || 0} 题 · ${c.docs || 0} 文档 · ${c.exams || 0} 场考试</span>
       </span>
       <span class="row" style="gap:6px">
-        ${isCur ? '<span style="color:var(--muted);font-size:12px">当前</span>' : `<button class="ghost" data-act="switch">进入</button>`}
-        <button class="ghost" data-act="rename">重命名</button>
-        ${b.id === 'default' ? '' : `<button class="danger" data-act="del">删除</button>`}
+        ${isCur ? '<span style="color:var(--muted);font-size:12px">当前</span>' : `<button class="ibtn" data-tip="切换到这个题库" data-act="switch">↪</button>`}
+        <button class="ibtn" data-tip="重命名题库" data-act="rename">✏️</button>
+        ${b.id === 'default' ? '' : `<button class="ibtn danger" data-tip="删除这个题库" data-act="del">🗑</button>`}
       </span>
     </div>`;
   }).join('');
@@ -8766,7 +8967,7 @@ const HELP_SECTIONS = [
       <div class="help-h4">随手记笔记</div>
       <ul>
         <li>题干上方有「📝 我的笔记」输入框：边做题边写思路、易错点和记忆口诀，<b>停手约 1 秒自动保存</b>，也可按 <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Enter</span> 立即保存。</li>
-        <li>题干上方还有<b>五颗星（⭐ 重要程度）</b>：觉得这道题重要就点高星（1 了解 · 2 一般 · 3 较重要 · 4 重要 · 5 核心），点了立即保存；重要程度会汇总到知识点图谱，节点大小与外环颜色随之变化。</li>
+        <li>题干上方还有<b>五颗星（⭐ 重要程度）</b>：觉得这道题重要就点高星（1 了解 · 2 一般 · 3 较重要 · 4 重要 · 5 核心），点了立即保存；重要程度会汇总到知识点图谱，节点大小与节点上方的星数随之变化。</li>
         <li>切题、点「下一题」或提交答案前会先把笔记存好；笔记存在题目上，下次再练到同一题会自动带出来，题库管理里也能查看修改。</li>
       </ul>
       <div class="help-h4">快捷键</div>
@@ -8902,7 +9103,7 @@ const HELP_SECTIONS = [
       </ul>
       <div class="help-h4">图的读法</div>
       <ul>
-        <li><b>节点大小随重要程度变化</b>：知识点的重要程度取其下题目的<b>最高星</b>（默认 3 星），节点随之变大变小（1 星最小组 0.85×、5 星最大 1.25×）；<b>≥4 星的知识点外圈还有一道彩色环</b>（<span class="pill amber">4 星 橙</span> <span class="pill red">5 星 红</span>），一眼看出哪些是重点。</li>
+        <li><b>节点大小随重要程度变化</b>：知识点的重要程度取其下题目的<b>最高星</b>（默认 3 星），节点随之变大变小（3 星为基准，1 星约 0.61×、5 星约 1.09×）；<b>≥4 星的知识点四周环绕星数</b>（<span class="pill amber">4 星 ★★★★</span> <span class="pill red">5 星 ★★★★★</span>，星尖朝外），一眼看出哪些是重点。</li>
         <li><b>节点颜色</b>：<span class="pill green">绿 已掌握 ≥80%</span> <span class="pill amber">黄 待巩固 60–79%</span> <span class="pill red">红 薄弱 &lt;60%</span> <span class="pill gray">灰 未练习</span>——这四色图例本身也是按钮：<b>点一下只看这一档</b>的知识点（画布左上角出现「只看 薄弱 &lt;60%（N 个）」浮标），再点一次或点 ✕ 恢复。适合考前只盯薄弱点、或先看哪些还没练过。</li>
         <li><b>连线常态是细线</b>（颜色淡，不抢节点）；<b>鼠标悬停或单击选中某个知识点</b>时，与它相连的线才<b>加粗、加深颜色</b>（同题线变深蓝、章节线变深青、相似线变深紫），并画出双向箭头，链上的邻居亮起淡蓝光环，其余节点与连线自动淡出——一眼看清它的关系网。</li>
         <li><b>⭐ 重要程度</b>：复习、答题练习、题库管理里每道题上方都有五颗星，<b>点第几颗就设为几星</b>（1 了解 · 2 一般 · 3 较重要 · 4 重要 · 5 核心），随手可改；知识点取其下题目的最高星。工具栏「⭐ 重要」开关只看 ≥4 星的知识点；题库管理还能按重要程度筛选、导出 Word 时也跟随该筛选。</li>

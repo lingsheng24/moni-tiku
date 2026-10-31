@@ -146,8 +146,10 @@ describe('复习统计与队列：revTodayStat / revForecast / buildRevQueue', (
 describe('组卷：buildPaper', () => {
   const examCfgScore = { single_choice: 2, multiple_choice: 4, true_false: 2, fill_blank: 3, short_answer: 6 };
   const TYPES = { essay_custom: '论述题' };
+  /* v1.49.0：paperScoreOf 改为调 typeScoreOf（按题型取值），测试用桩保持原分值语义 */
+  const typeScoreOf = t => examCfgScore[t] ?? (t === 'essay_custom' ? 5 : 0);
   const { buildPaper } = loadFns(['buildPaper', 'paperScoreOf', 'PAPER_ORDER', 'GROUP_TITLE'],
-    { examCfgScore, TYPES, isCustomType: t => t === 'essay_custom' });
+    { typeScoreOf, TYPES, isCustomType: t => t === 'essay_custom' });
 
   const qs = [
     { id: 'q1', type: 'fill_blank', answer: 'TCP' },

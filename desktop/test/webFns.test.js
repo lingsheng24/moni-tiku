@@ -144,7 +144,8 @@ describe('组卷：pickExamItems / examTotalScore', () => {
 
   it('examTotalScore：按题型分值求和，自定义题型默认 5 分', () => {
     const { examTotalScore } = loadFns(['examTotalScore'], {
-      examCfgScore: { single_choice: 2, multiple_choice: 5 },
+      /* v1.49.0：分值来源改为 typeScoreOf（按题型持久化配置），此处用桩等价原 examCfgScore */
+      typeScoreOf: t => ({ single_choice: 2, multiple_choice: 5 })[t] ?? (t.startsWith('custom_') ? 5 : 0),
       isCustomType: t => t.startsWith('custom_'),
     });
     const items = [{ type: 'single_choice' }, { type: 'multiple_choice' }, { type: 'custom_x' }, { type: 'unknown' }];
