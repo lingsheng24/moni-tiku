@@ -58,6 +58,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 打开数据所在文件夹 */
   openDataDir: () => invoke('app:openDataDir'),
   openBackupDir: () => invoke('app:openBackupDir'),
+  /** ---- v1.52.0 知识库 MD 文档（<数据目录>/knowledge/*.md）----
+   * name 一律不带 .md 后缀；list 返回 [{name,size,mtime,ctime}] */
+  kbDocs: {
+    dir: () => invoke('kbdoc:dir'),
+    list: () => invoke('kbdoc:list'),
+    read: (name) => invoke('kbdoc:read', name),
+    write: (name, content) => invoke('kbdoc:write', name, content),
+    del: (name) => invoke('kbdoc:del', name),
+    rename: (oldName, newName) => invoke('kbdoc:rename', oldName, newName),
+  },
   /** v1.41.0 全量备份 / 恢复（所有题库 + 全局设置，单 JSON 文件，主进程出对话框） */
   exportAll: () => invoke('app:exportAll'),
   importAll: () => invoke('app:importAll'),

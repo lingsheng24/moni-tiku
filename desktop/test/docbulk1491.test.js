@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /* v1.49.1 文档管理批量管理（勾选 / 批量出题队列 / 批量归科目 / 批量删除）
- * + 知识库里的「知识点图谱」图标改用与左侧导航同一套 SVG */
+ * + 知识库里的「关系图谱」图标改用与左侧导航同一套 SVG */
 import { describe, test, expect } from 'vitest';
 const { loadFns, HTML_PATH } = require('./extract-html.js');
 const fs = require('fs');
@@ -151,7 +151,7 @@ describe('出题页批量队列', () => {
 
 describe('知识库图谱图标与导航栏一致', () => {
   test('kpIconSVG 与左侧导航同一套图形（中心球 + 三个卫星 + 虚线）', () => {
-    const fn = between('function kpIconSVG', '/* ============ 知识点图谱');
+    const fn = between('function kpIconSVG', '/* ============ 关系图谱');
     expect(fn).toContain('circle cx="12" cy="12" r="2.8"');
     expect(fn).toContain('circle cx="12" cy="4.9"');
     expect(fn).toContain('circle cx="18.9" cy="16.9"');
@@ -160,7 +160,7 @@ describe('知识库图谱图标与导航栏一致', () => {
   });
 
   test('知识库两处图谱按钮改用 kpIconSVG，不再用 emoji', () => {
-    const a = HTML.indexOf('data-tip="打开知识点图谱"');
+    const a = HTML.indexOf('data-tip="打开关系图谱"');
     expect(a).toBeGreaterThan(0);
     expect(HTML.slice(a, a + 160)).toContain('${kpIconSVG(15)}');
     const b = HTML.indexOf('data-tip="打开完整图谱"');

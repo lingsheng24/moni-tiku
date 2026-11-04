@@ -153,7 +153,7 @@ function setupChineseMenu() {
       submenu: [
         { label: '导入文档…', accelerator: 'CmdOrCtrl+O', click: send('import') },
         { type: 'separator' },
-        { label: '系统设置', accelerator: 'CmdOrCtrl+,', click: send('settings') },
+        { label: '设置', accelerator: 'CmdOrCtrl+,', click: send('settings') },
         { label: '退出', accelerator: 'Alt+F4', role: 'quit' },
       ],
     },
@@ -505,6 +505,66 @@ function regData() {
     } catch (_) { }
     shell.showItemInFolder(dataFile());
     return true;
+  });
+
+  /* ---- v1.52.0 知识库 MD 文档（Obsidian 式）----
+   * 文档存 <数据目录>/knowledge/*.md，纯文本 markdown 文件，用户可用 Obsidian 等编辑器直接打开同一目录。
+   * 文件名即文档标题；删除走 knowledge/.trash/（保留原名 + 时间戳），可手工找回。 */
+  const KB_NAME_BAD = /[\\/:*?"<>|]/g;                 // Windows 文件名非法字符
+  function kbDir() { return path.join(path.dirname(dataFile()), 'knowledge'); }
+  function kbTrashDir() { return path.join(kbDir(), '.trash'); }
+  function kbSafeName(name) {
+    let n = String(name || '').trim().replace(KB_NAME_BAD, ' ').slice(0, 80);
+    if (!n) n = '未命名';
+    if (!/\.md$/i.test(n)) n += '.md';
+    return n;
+  }
+  function kbEnsureDir() { try { fs.mkdirSync(kbDir(), { recursive: true }); } catch (_) { } }
+  ipcMain.handle('kbdoc:dir', () => { kbEnsureDir(); return kbDir(); });
+  ipcMain.handle('kbdoc:list', () => {
+    kbEnsureDir();
+    const out = [];
+    try {
+      for (const f of fs.readdirSync(kbDir())) {
+        if (!/\.md$/i.test(f)) continue;
+        try {
+          const st = fs.statSync(path.join(kbDir(), f));
+          out.push({ name: f.replace(/\.md$/i, ''), size: st.size, mtime: st.mtimeMs, ctime: st.birthtimeMs });
+        } catch (_) { }
+      }
+    } catch (_) { }
+    out.sort((a, b) => b.mtime - a.mtime);
+    return out;
+  });
+  ipcMain.handle('kbdoc:read', (e, name) => {
+    try { return fs.readFileSync(path.join(kbDir(), kbSafeName(name)), 'utf8'); }
+    catch (_) { return null; }
+  });
+  ipcMain.handle('kbdoc:write', (e, name, content) => {
+    kbEnsureDir();
+    const file = path.join(kbDir(), kbSafeName(name));
+    try { fs.writeFileSync(file, String(content ?? ''), 'utf8'); return { ok: true, mtime: fs.statSync(file).mtimeMs }; }
+    catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+  });
+  ipcMain.handle('kbdoc:del', (e, name) => {
+    try {
+      const file = path.join(kbDir(), kbSafeName(name));
+      if (!fs.existsSync(file)) return { ok: true };
+      try { fs.mkdirSync(kbTrashDir(), { recursive: true }); } catch (_) { }
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      try { fs.renameSync(file, path.join(kbTrashDir(), stamp + ' ' + kbSafeName(name))); }   // 先试移入回收目录
+      catch (_) { fs.unlinkSync(file); }                                                       // 失败则真删
+      return { ok: true };
+    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+  });
+  ipcMain.handle('kbdoc:rename', (e, oldName, newName) => {
+    try {
+      kbEnsureDir();
+      const from = path.join(kbDir(), kbSafeName(oldName)), to = path.join(kbDir(), kbSafeName(newName));
+      if (fs.existsSync(to)) return { ok: false, error: '同名文档已存在' };
+      fs.renameSync(from, to);
+      return { ok: true };
+    } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
   });
 
   /* ---- v1.41.0 全量备份 / 恢复：所有题库 + 全局设置打进一个 JSON 文件 ----
@@ -1182,7 +1242,7 @@ function registerWebSearch() {
 /* 下载源与测速
  * GitHub Release 在国内常常只有几十 KB/s（本机实测 0.06 MB/s，94MB 要 25 分钟），
  * 公开加速镜像同一文件能到 5 MB/s。因此检查更新时并行探测各源，自动选最快的；
- * 下载中途失败自动切到次快源重试一次；用户也可在系统设置里手动锁定某个源。 */
+ * 下载中途失败自动切到次快源重试一次；用户也可在设置里手动锁定某个源。 */
 const GH_BASE = 'https://github.com/lingsheng24/moni-tiku/releases/latest/download/';
 /* ⚠️ GitCode 的附件直链是「releases/download/<tag 或 latest>/<文件名>」。
  * 只有这一种写法能拿到真实文件（会 302 到 file-cdn.gitcode.com）。

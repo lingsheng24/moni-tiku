@@ -171,7 +171,8 @@ describe('知识库界面接入', () => {
     expect(HTML).toContain("${isQN ? 'disabled' : ''}");
   });
   test('知识库副标题与空状态都提到题目笔记', () => {
-    expect(HTML).toContain('题目笔记、知识点笔记、错题笔记、手记、联网查询收藏都收在这里');
+    // v1.52.0：手记已迁移为 MD 文档，副标题改为「笔记聚合」口径
+    expect(HTML).toContain('题目笔记、知识点笔记、错题笔记、联网查询收藏都收在这里');
     expect(HTML).toContain('复习或答题练习时在题目上方写「📝 我的笔记」');
   });
   test('帮助手册知识库章列出五类来源', () => {
@@ -188,12 +189,19 @@ describe('v1.47.0 知识库卡片默认折叠', () => {
     expect(HTML).toContain('kb-foldable');
     expect(HTML).toContain('onclick="kbToggleCard(');
   });
-  test('kbToggleCard 切换正文/摘要/箭头', () => {
+  test('kbToggleCard 切换正文/摘要/折叠按钮状态', () => {
     const s = HTML.indexOf('function kbToggleCard');
-    const f = HTML.slice(s, s + 600);
+    const f = HTML.slice(s, s + 780);
     expect(f).toContain("getElementById('kbbd-' + id)");
     expect(f).toContain("getElementById('kbsum-' + id)");
-    expect(f).toContain("'▾'");
+    expect(f).toContain("getElementById('kbfold-' + id)");
+    expect(f).toContain("classList.toggle('on', !open)");
+  });
+  test('v1.50.3：折叠按钮 32px 固定卡片右上角（不再是 12px 小三角）', () => {
+    expect(HTML).not.toContain("title=\"展开 / 收起\">▸</span>");
+    expect(HTML).toContain('width:32px;height:32px');
+    expect(HTML).toMatch(/\.kb-fold\{position:absolute;top:10px;right:12px/);
+    expect(HTML).toMatch(/\.kb-fold\.on svg\{transform:rotate\(90deg\)\}/);
   });
   test('列表渲染传入索引用作 DOM 标识', () => {
     expect(HTML).toContain('list.map((n, i) => kbNoteCard(n, i))');

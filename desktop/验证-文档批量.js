@@ -230,7 +230,7 @@ class CDP {
     /* 8) 知识库里的图谱图标与导航栏一致（SVG，不是 emoji） */
     const ico = await cdp.eval(`(async () => {
       go('kb'); await new Promise(r => setTimeout(r, 500));
-      const b = [...document.querySelectorAll('button')].filter(x => x.getAttribute('data-tip') === '打开知识点图谱');
+      const b = [...document.querySelectorAll('button')].filter(x => x.getAttribute('data-tip') === '打开关系图谱');
       const navSvg = document.querySelector('.nav-item[data-v="kp"] svg');
       if (!b.length) return { btn: 0 };
       const svg = b[0].querySelector('svg');
@@ -242,7 +242,7 @@ class CDP {
         circles: svg ? svg.querySelectorAll('circle').length : 0,
       };
     })()`);
-    check('知识库「打开知识点图谱」按钮用 SVG 图标', ico.btn >= 1 && ico.hasSvg && ico.circles === 4, ico);
+    check('知识库「打开关系图谱」按钮用 SVG 图标', ico.btn >= 1 && ico.hasSvg && ico.circles === 4, ico);
     check('图标 viewBox 与左侧导航栏一致、无 emoji 文字', ico.sameVb === true && ico.text === '', ico);
 
     check('全程无未捕获异常', cdp.logs.filter(l => /error|exception/i.test(String(l))).length === 0, cdp.logs.slice(0, 3));

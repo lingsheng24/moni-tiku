@@ -96,8 +96,10 @@ describe('图谱节点显示重要程度', () => {
   test('节点半径随星级缩放，命中检测用同一公式', () => {
     const draw = between('kpDraw', '/** 命中检测');
     expect(draw).toContain('(0.85 + (imp - 3) * 0.12)');
-    const pick = between('kpPick', 'function kpTick');
-    expect(pick).toContain('(0.85 + ((p.n.imp || 3) - 3) * 0.12)');
+    /* v2.2.0：公式统一到 kpNodeRadius（渲染 / 命中 / 连线端点共用），命中检测里调用它 */
+    const pick = between('kpNodeRadius', 'function kpNodeVisible');
+    expect(pick).toContain('(0.85 + ((nd.imp || 3) - 3) * 0.12)');
+    expect(between('kpPick', 'function kpTick')).toContain('const r = kpNodeRadius(p)');
   });
   test('v1.49.1：≥4 星节点的星环绕节点均匀分布（星尖朝外），不再画彩色外环', () => {
     const draw = between('kpDraw', '/** 命中检测');

@@ -1,5 +1,5 @@
 /**
- * v1.45.0 题目笔记自动挂进知识点图谱
+ * v1.45.0 题目笔记自动挂进关系图谱
  * 覆盖：题目笔记按 knowledge_point 归到知识点、计数并入图谱角标、详情卡渲染题目笔记区、写完笔记即时同步。
  */
 import { describe, test, expect } from 'vitest';

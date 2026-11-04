@@ -2,7 +2,7 @@
  * 运行：NODE_TLS_REJECT_UNAUTHORIZED=0 node desktop/清理历史版本.js
  * 加 --dry 只列出不删除
  */
-const KEEP = 'v1.49.1';
+const KEEP = 'v2.3.0';
 const DRY = process.argv.includes('--dry');
 const GH = { owner: 'lingsheng24', repo: 'moni-tiku' };
 const GC = { owner: 'JinFengjian', repo: 'moni-tiku' };

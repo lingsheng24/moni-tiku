@@ -379,7 +379,7 @@ function wsRenderAI() {
     if (s.aiErr) { box.innerHTML = `<div class="ws-empty">⚠️ ${esc(s.aiErr)}</div>`; return; }
     box.innerHTML = `<div class="ws-empty">${state.settings.apiKey
       ? '点「🤖 AI 解答」让 AI 用通俗的话讲清这个概念（会参考左侧网页摘要，避免瞎编）。\n答完后在下方输入框可以继续追问，AI 记得前面聊过什么。'
-      : '还没配置 AI 接口 —— 到「系统设置 → AI 接口」填 API Key 后就能在这里直接得到讲解。'}</div>`;
+      : '还没配置 AI 接口 —— 到「设置 → AI 接口」填 API Key 后就能在这里直接得到讲解。'}</div>`;
     return;
   }
   /* 逐条渲染气泡；流式中最后一条 assistant 还没内容时显示生成中 */
@@ -414,7 +414,7 @@ async function wsAskAI(text, auto = false) {
   const ask = String(text || '').trim() || s.q;
   if (!ask) { toast('先输入要查询的内容', 'err'); return; }
   if (!state.settings.apiKey) {
-    s.aiErr = '还没配置 AI 接口（系统设置 → AI 接口）。先看左侧网页结果，或点「在浏览器中打开搜索页」。';
+    s.aiErr = '还没配置 AI 接口（设置 → AI 接口）。先看左侧网页结果，或点「在浏览器中打开搜索页」。';
     wsRenderAI();
     return;
   }
@@ -460,7 +460,7 @@ function wsAskAIFromInput() {
   const v = (document.getElementById('wsAiIn')?.value || '').trim();
   if (!v) { toast('输入想追问的内容', 'err'); return; }
   if (!state.settings.apiKey) {
-    wsState.aiErr = '还没配置 AI 接口（系统设置 → AI 接口），配置后即可连续追问。';
+    wsState.aiErr = '还没配置 AI 接口（设置 → AI 接口），配置后即可连续追问。';
     wsRenderAI();
     return;
   }

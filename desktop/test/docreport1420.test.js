@@ -84,9 +84,15 @@ describe('帮助配图外置：构建一致性（v1.42.0）', () => {
     expect(html).toContain("window.__HELP_IMGS__) || HELP_IMGS_EMBED");
   });
 
-  it('desktop/help-imgs.json 与 src/helpimgs.js 数据同步（17 张）', () => {
+  it('desktop/help-imgs.json 与 src/helpimgs.js 数据同步（张数与 HTML 帮助章配图一致）', () => {
     const json = JSON.parse(fs.readFileSync(path.join(ROOT, 'desktop/help-imgs.json'), 'utf8'));
-    expect(Object.keys(json).length).toBe(17);
+    // v2.1.0 起按 20 张断言；v2.3.0 增至 23 张（22~24：周报 / 手机首页 / 手机抽屉）。
+    // 改成「≥ 帮助 shots 引用的编号数」防呆：只要引用了某张图，json 里就必须有它。
+    expect(Object.keys(json).length).toBeGreaterThanOrEqual(23);
+    const html = fs.readFileSync(path.join(ROOT, '模拟题库-Web版.html'), 'utf8');
+    const used = [...html.matchAll(/shots:\s*\[\[([^\]]+)\]/g)].join('');
+    for (const k of Object.keys(json)) expect(html).toContain(`'${k.slice(1)}'`);   // key s01 ↔ 章 '01'
+    expect(used.length).toBeGreaterThan(0);
     const srcJs = fs.readFileSync(path.join(ROOT, 'src/helpimgs.js'), 'utf8');
     for (const [k, v] of Object.entries(json)) expect(srcJs).toContain(`${k}: '${v}'`);
   });
