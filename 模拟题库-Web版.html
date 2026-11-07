@@ -65,29 +65,48 @@ body{font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;backgroun
 .nav-group-title{padding:1px 12px 4px;font-size:11px;line-height:1.4;letter-spacing:.06em;color:var(--muted);opacity:.75;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.nav-collapsed .nav-group-title{display:none}
 body.nav-collapsed .nav-group + .nav-group{margin-top:6px;padding-top:8px}
-/* ---------- 两大板块切换工作区（v1.51.0）----------
- * 侧栏顶部两块切换卡：知识库 / 模拟题库。点谁就只显示谁的子功能，公共功能始终可见。
+/* ---------- 两大板块切换工作区（v1.51.0，v2.4.0 改为首页顶部切换）----------
+ * 功能按板块归组：body[data-sec] 决定显示谁的子功能，公共功能始终可见。
  * 当前板块记于 settings.navSection，go() 跳到板块内视图时自动跟随切换。 */
-.nav-sections{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;flex:none;margin-bottom:2px}
-.nav-sec-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:9px 4px 8px;border:1px solid var(--border);border-radius:10px;cursor:pointer;color:var(--muted);background:var(--panel);transition:.15s;user-select:none;min-width:0;text-align:center}
-.nav-sec-card:hover{border-color:var(--primary);color:var(--text);background:var(--panel2)}
-.nav-sec-card.active{background:var(--primary-soft);border-color:var(--primary);color:var(--primary)}
-.nav-sec-card .sec-ico{width:auto;text-align:center;flex:none}
-.nav-sec-card .sec-ico svg{display:block;margin:0 auto}
-.nav-sec-card .sec-meta{min-width:0;display:flex;flex-direction:column;align-items:center;line-height:1.3}
-.nav-sec-card .sec-meta b{font-size:12px;font-weight:600;white-space:nowrap}
-.nav-sec-card .sec-meta small{font-size:10px;color:var(--muted);white-space:nowrap}
-.nav-sec-card.active .sec-meta small{color:var(--primary);opacity:.8}
-.nav-sec-card .sec-mini{display:none;font-size:12.5px;font-weight:600;line-height:1}
+/* ---------- v2.4.0 侧栏顶部：只显示「当前工作区」，不再放两张切换卡 ----------
+   切换入口统一在首页顶部（dashSecSwitchHTML）；这里纯指示，点击无动作。
+   body[data-sec] 驱动显隐，applySection 只改 body 属性即可。 */
+.nav-sec-now{display:flex;align-items:center;justify-content:center;width:100%;flex:none;
+  margin-bottom:8px;padding:7px 8px;border:1px solid var(--border);border-radius:10px;
+  background:var(--panel2);color:var(--primary);user-select:none;overflow:hidden}
+.nsn-set{display:none;align-items:center;justify-content:center;gap:8px;min-width:0;width:100%}
+body[data-sec="kb"] .nsn-set[data-s="kb"],
+body[data-sec="tik"] .nsn-set[data-s="tik"]{display:flex}
+.nsn-set .sec-ico{width:auto;flex:none}
+.nsn-set .sec-ico svg{display:block;margin:0 auto}
+.nsn-set .sec-meta{min-width:0;display:flex;flex-direction:column;align-items:flex-start;line-height:1.25}
+.nsn-set .sec-meta b{font-size:12px;font-weight:600;white-space:nowrap}
+.nsn-set .sec-meta small{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nsn-set .sec-mini{display:none;font-size:12.5px;font-weight:600;line-height:1}
 /* 板块内容组：只显示当前板块对应的组 */
 .nav-group[data-sec]{display:none}
 body[data-sec="kb"] .nav-group[data-sec="kb"]{display:flex}
 body[data-sec="tik"] .nav-group[data-sec="tik"]{display:flex}
-/* 折叠态：两块卡竖排成图标小方块，用单字（知/题）区分，激活块高亮 */
-body.nav-collapsed .nav-sections{grid-template-columns:1fr;width:44px;gap:6px}
-body.nav-collapsed .nav-sec-card{width:44px;padding:8px 0;gap:3px}
-body.nav-collapsed .nav-sec-card .sec-meta{display:none}
-body.nav-collapsed .nav-sec-card .sec-mini{display:block}
+/* 折叠态：指示条缩成一个小方块，用单字（知/题）区分 */
+body.nav-collapsed .nav-sec-now{width:44px;padding:8px 0;margin-left:auto;margin-right:auto}
+body.nav-collapsed .nsn-set .sec-meta{display:none}
+body.nav-collapsed .nsn-set .sec-mini{display:block}
+/* ---------- v2.4.0 首页顶部板块切换条（知识库 / 模拟题库） ----------
+   首页是主入口，把「当前在哪个工作区」放到最显眼的位置；侧栏顶部只保留当前板块的指示条。 */
+.dsec-switch{display:flex;gap:4px;padding:4px;margin-bottom:16px;background:var(--panel);
+  border:1px solid var(--border);border-radius:13px;box-shadow:var(--shadow)}
+.dsec{flex:1;display:flex;align-items:center;justify-content:center;gap:9px;min-width:0;
+  padding:10px 14px;background:transparent;border:1px solid transparent;border-radius:10px;
+  color:var(--muted);font-size:13.5px;font-weight:400;line-height:1.25;transition:.15s;height:auto}
+.dsec:hover{background:var(--panel2);border-color:var(--border);color:var(--text);filter:none}
+.dsec.active{background:var(--primary-soft);border-color:var(--primary);color:var(--primary);font-weight:600}
+.dsec .dsec-ico{font-size:17px;line-height:1;flex:none}
+.dsec .dsec-txt{display:flex;flex-direction:column;min-width:0;text-align:left}
+.dsec .dsec-txt b{font-weight:inherit;font-size:13.5px}
+.dsec .dsec-txt small{font-size:11px;color:var(--muted);font-weight:400;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.dsec.active .dsec-txt small{color:var(--primary);opacity:.75}
+@media (max-width:680px){body:not(.is-desktop) .dsec-switch{display:none}}   /* 手机端顶栏已有知/题切换，不重复 */
 /* 长按排序：按住 0.4s 进入拖动——按下时轻微下压给出反馈，成立后半透明跟手 */
 .nav-item.nav-arming{background:var(--panel2);transform:scale(.96)}
 .nav-item.nav-dragging{opacity:.45;cursor:grabbing}
@@ -252,7 +271,6 @@ tr.click:hover{background:var(--panel2);cursor:pointer}
 .subj-card .m{color:var(--muted);font-size:12px}
 .subj-sw{width:20px;height:20px;border-radius:5px;cursor:pointer;border:2px solid transparent;flex:none}
 .subj-sw.on{border-color:var(--text);box-shadow:0 0 0 2px var(--panel)}
-.subj-inline{display:flex;align-items:center;gap:6px}
 /* ---------- 题目渲染 ---------- */
 .q-item{border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px;background:var(--panel)}
 .q-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
@@ -298,9 +316,6 @@ tr.click:hover{background:var(--panel2);cursor:pointer}
   line-height:1.35;padding:4px 8px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;
   transition:opacity .12s,transform .12s;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,.22)}
 .kpz button[data-tip]:hover::after{opacity:1;transform:translateY(-50%) translateX(0)}
-/* 浮标里的 ✕ 也统一成小方块，悬停给提示 */
-.kp-chip-x{width:20px;height:20px;min-width:20px;padding:0;border-radius:6px;border:none;background:var(--primary-soft);color:var(--primary);font-size:12px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
-.kp-chip-x:hover{background:var(--primary);color:#fff}
 /* v1.28.3：斥力调节浮层（右上角「⇹」按钮展开） */
 .kp-repel{position:absolute;right:54px;top:12px;z-index:4;display:none;width:188px;
   background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:9px 11px;
@@ -526,7 +541,6 @@ html[data-theme="dark"] .selbar{box-shadow:0 8px 26px rgba(0,0,0,.5)}
   font-size:13px;line-height:1.5;transition:.15s;border-left:2px solid transparent}
 .help-toc a:hover{background:var(--panel2);color:var(--primary)}
 .help-toc a.on{background:var(--primary-soft);color:var(--primary);font-weight:600;border-left-color:var(--primary)}
-.help-toc .toc-sub{padding-left:20px;font-size:12px;color:var(--muted)}
 .help-body{min-width:0}
 .help-sec{border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:18px 20px;margin-bottom:14px;scroll-margin-top:16px}
 .help-sec>h3{margin:0 0 12px;font-size:17px;display:flex;align-items:center;gap:8px}
@@ -652,7 +666,6 @@ body.is-desktop .modal-mask{top:36px}
 /* ---------- 间隔复习 ---------- */
 .rev-card{min-height:210px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:26px 20px}
 .rev-q{font-size:19px;line-height:1.7;font-weight:500;margin-bottom:14px}
-.rev-mask{background:var(--panel2);border:1px dashed var(--border);border-radius:12px;width:100%;padding:30px 0;color:var(--muted)}
 .rate-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%;margin-top:6px}
 .rate-btn{padding:14px 6px;border-radius:12px;border:1px solid var(--border);cursor:pointer;transition:.15s;text-align:center;background:var(--panel)}
 .rate-btn:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
@@ -677,10 +690,9 @@ a{color:var(--primary)}
   .sidebar{padding-left:8px;padding-right:8px;align-items:center}
   .sidebar .logo{padding:6px 0 14px;justify-content:center}
   .nav-item{width:44px;justify-content:center;padding:10px 0}
-  .nav-sections{grid-template-columns:1fr;width:44px;gap:6px}
-  .nav-sec-card{width:44px;padding:8px 0;gap:3px}
-  .nav-sec-card .sec-meta{display:none}
-  .nav-sec-card .sec-mini{display:block}
+  .nav-sec-now{width:44px;padding:8px 0;margin-left:auto;margin-right:auto}
+  .nsn-set .sec-meta{display:none}
+  .nsn-set .sec-mini{display:block}
   .main{margin-left:64px!important}
   #navResizer{display:none}
   .sidebar .nav-footrow{gap:4px;width:44px}
@@ -946,10 +958,10 @@ kbd .kbd-tag,kbd .kbd-tag{cursor:default}
   body:not(.is-desktop) .sidebar .nav-item span.txt{display:block!important}
   body:not(.is-desktop) .sidebar .nav-item{width:auto!important;justify-content:flex-start!important;
     padding:11px 12px!important;gap:10px!important}
-  body:not(.is-desktop) .sidebar .nav-sections{grid-template-columns:1fr 1fr!important;width:100%!important;gap:6px!important}
-  body:not(.is-desktop) .sidebar .nav-sec-card{width:auto!important;padding:9px 4px 8px!important;gap:3px!important}
-  body:not(.is-desktop) .sidebar .nav-sec-card .sec-meta{display:flex!important}
-  body:not(.is-desktop) .sidebar .nav-sec-card .sec-mini{display:none!important}
+  body:not(.is-desktop) .sidebar .nav-sec-now{width:100%!important;padding:7px 10px!important;justify-content:flex-start!important}
+  body:not(.is-desktop) .sidebar .nav-sec-now .nsn-set{justify-content:flex-start!important}
+  body:not(.is-desktop) .sidebar .nav-sec-now .nsn-set .sec-meta{display:flex!important}
+  body:not(.is-desktop) .sidebar .nav-sec-now .nsn-set .sec-mini{display:none!important}
   body:not(.is-desktop) .sidebar .nav-footrow{width:100%!important;gap:2px!important}
   body:not(.is-desktop) .sidebar .nav-footrow .nav-foot{width:100%!important;
     justify-content:flex-start!important;padding:10px 12px!important;gap:8px!important}
@@ -967,12 +979,11 @@ kbd .kbd-tag,kbd .kbd-tag{cursor:default}
   body:not(.is-desktop) .card{padding:14px 14px;border-radius:12px}
   body:not(.is-desktop) .card h3{font-size:14.5px}
   body:not(.is-desktop) .grid{grid-template-columns:1fr!important;gap:10px!important}
-  body:not(.is-desktop) .grid.g2{grid-template-columns:1fr!important}
   body:not(.is-desktop) .stat{padding:12px}
   body:not(.is-desktop) .row{gap:8px}
   body:not(.is-desktop) button{min-height:40px}
   body:not(.is-desktop) input,body:not(.is-desktop) select,body:not(.is-desktop) textarea{font-size:16px}  /* 防止 iOS 聚焦自动放大 */
-  body:not(.is-desktop) .wrap,body:not(.is-desktop) .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  body:not(.is-desktop) .wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
   body:not(.is-desktop) table{min-width:520px}
   /* 文档列表：只留「名称 + 日期」两列，标签/知识点/链接/摘要收起（卡片视图仍完整） */
   body:not(.is-desktop) .kbd-list-head,body:not(.is-desktop) .kbd-row{
@@ -1055,18 +1066,18 @@ kbd .kbd-tag,kbd .kbd-tag{cursor:default}
 <div id="app">
   <aside class="sidebar">
     <div class="logo" id="navHome" title="返回首页总览" style="cursor:pointer" role="button" tabindex="0"><div class="mark">题</div><div><b>模拟题库</b><small id="logoVer"></small></div></div>
-    <!-- v1.51.0：两大板块切换工作区——顶部切换卡选板块，下方只显示当前板块的功能项 -->
-    <div class="nav-sections">
-      <div class="nav-sec-card" data-sec="kb" title="知识库板块：资料 · 笔记 · 图谱">
+    <!-- v2.4.0：侧栏只显示当前工作区（切换在首页顶部），不再放两张切换卡 -->
+    <div class="nav-sec-now" title="当前工作区；切换请到首页顶部">
+      <span class="nsn-set" data-s="kb">
         <span class="sec-ico"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.1 3.9h9.4a1.4 1.4 0 0 1 1.4 1.4v13.3H7.1a1.4 1.4 0 0 1-1.4-1.4V5.3a1.4 1.4 0 0 1 1.4-1.4Z"/><path d="M8.5 3.9v14.7"/></g><path d="M13.1 3.9v5l1.8-1.25L16.7 8.9V3.9Z" fill="currentColor" stroke="none"/><path d="M10.9 11.1h4.6M10.9 14.3h3.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
-        <span class="sec-meta"><b>知识库</b><small>资料笔记</small></span>
+        <span class="sec-meta"><b>知识库</b><small>资料 · 笔记 · 图谱</small></span>
         <span class="sec-mini">知</span>
-      </div>
-      <div class="nav-sec-card" data-sec="tik" title="模拟题库板块：出题 · 练习 · 考试">
+      </span>
+      <span class="nsn-set" data-s="tik">
         <span class="sec-ico"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="4.8" y="5.2" width="4" height="13.6" rx=".9"/><rect x="10.4" y="5.2" width="4" height="13.6" rx=".9"/></g><rect x="16" y="7.2" width="3.6" height="11.6" rx=".9" fill="currentColor" stroke="none" transform="rotate(9 17.8 13)"/></svg></span>
-        <span class="sec-meta"><b>模拟题库</b><small>出题练习</small></span>
+        <span class="sec-meta"><b>模拟题库</b><small>出题 · 练习 · 考试</small></span>
         <span class="sec-mini">题</span>
-      </div>
+      </span>
     </div>
     <!-- 通用：首页总览（两板块都显示） -->
     <div class="nav-group" data-g="common">
@@ -1121,7 +1132,7 @@ kbd .kbd-tag,kbd .kbd-tag{cursor:default}
 const IS_DESKTOP = !!window.electronAPI;
 /* 应用版本号：窗口标题、侧边栏、首页都用它。
  * 桌面版启动后会被安装包的真实版本覆盖；发版时与 desktop/package.json 的 version 一起改。 */
-const APP_VER = '2.3.0';
+const APP_VER = '2.4.0';
 /* 界面实际显示的版本号：桌面版启动后会被安装包真实版本覆盖（applyAppTitle） */
 let APP_VER_SHOWN = APP_VER;
 /* 背景主题清单（与 CSS 里 html[data-theme=...] 一一对应）
@@ -1275,6 +1286,8 @@ const NAVW_COLLAPSED = 64;
 const NAVW_STEP = 8;
 let navDrag = null;          // 拖拽过程中的临时状态
 
+
+/** 把任意输入夹到 [NAVW_MIN, NAVW_MAX] 并取整；非法值回退默认宽度 */
 function clampNavW(n) {
   n = Math.round(+n || NAVW_DEFAULT);
   return Math.max(NAVW_MIN, Math.min(NAVW_MAX, n));
@@ -1445,11 +1458,10 @@ const NAV_DEFAULT_ORDER = ['dash', 'kbdocs', 'ask', 'kb', 'kp', 'docs', 'gen', '
  * 当前板块记于 settings.navSection，跳转到板块内视图时自动跟随切换。 */
 const VIEW_SEC = { kbdocs: 'kb', ask: 'kb', kb: 'kb', kp: 'kb', docs: 'tik', gen: 'tik', bank: 'tik', practice: 'tik', exam: 'tik', mist: 'tik', review: 'tik' };
 const SEC_HOME_VIEW = { kb: 'kbdocs', tik: 'gen' };   // 点板块卡进入该板块的第一个功能
-/** 应用板块：body[data-sec] 驱动 CSS 显隐 + 切换卡高亮；save=true 时写入设置持久化 */
+/** 应用板块：body[data-sec] 驱动 CSS 显隐（侧栏指示条 / 功能分组）；save=true 时写入设置持久化 */
 function applySection(sec, save) {
   if (sec !== 'kb' && sec !== 'tik') sec = 'kb';
   document.body.dataset.sec = sec;
-  document.querySelectorAll('.nav-sec-card').forEach(c => c.classList.toggle('active', c.dataset.sec === sec));
   if (save) { state.settings.navSection = sec; DB.kvSet('settings', state.settings); }
 }
 /** 期望顺序 = 用户拖过的 + 默认顺序里新增/遗漏的补在后面 */
@@ -1777,12 +1789,15 @@ function isTypingTarget(el) {
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; } return a; };
 const fmtDate = d => d ? new Date(d).toLocaleString('zh-CN', { hour12: false }) : '';
 
+
+/** 轻提示：追加到 #toast 容器，3 秒后自动移除；type = 'ok' 绿 / 'err' 红 / 'amber' 黄 */
 function toast(msg, type = '') {
   const el = document.createElement('div');
   el.className = 'toast ' + type; el.textContent = msg;
   $('#toast').appendChild(el);
   setTimeout(() => el.remove(), 3000);
 }
+/** 打开通用弹窗：内容由调用方给整段 HTML；点遮罩或 Esc 关闭（见 modalMaskClose） */
 function modal(html) {
   $('#modal').innerHTML = `<div class="modal-mask" onclick="if(event.target===this)modalMaskClose()"><div class="modal">${html}</div></div>`;
 }
@@ -1792,6 +1807,7 @@ function modalMaskClose() {
   closeModal();
   if (inNavW) navCancelDialog();
 }
+/** 关闭弹窗并清空容器，不残留 DOM 与旧的事件监听 */
 function closeModal() { $('#modal').innerHTML = ''; }
 
 /* ---------- AI 调用（OpenAI 兼容接口） ---------- */
@@ -1877,6 +1893,7 @@ async function chat(messages, jsonMode = false, onChunk = null) {
   }
   return chatRetry(() => chatWeb(s, messages, jsonMode, onChunk));
 }
+/** 从 AI 回复里截出第一个 {...} 再解析——模型常带「好的，以下是 JSON」这类前后缀 */
 function parseJSON(text) {
   const m = text.match(/\{[\s\S]*\}/);
   if (!m) throw new Error('AI 返回内容无法解析为 JSON');
@@ -1887,6 +1904,7 @@ function parseJSON(text) {
  * 变成 U+FFFD（�）永久写进题库。这里在入库/显示前统一清洗，
  * 保证新题目干净，也能一键修复历史脏数据。 */
 const BAD_CHAR_RE = /[\uFFFD\uFFFE\uFFFF]|[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
+/** 入库 / 显示前统一清洗：去替换符与控制字符、统一换行、压掉多余空行 */
 function sanitizeText(s) {
   return String(s ?? '')
     .replace(BAD_CHAR_RE, '')
@@ -2154,12 +2172,14 @@ function localGenerate(doc, count, difficulty) {
 function normAns(s) {
   return String(s ?? '').replace(/[\s，。、；]/g, '').replace(/[AＡ]/g, 'A').toUpperCase();
 }
+/** 判断题答案归一化：正确/对/是/T/√ → true，错误/错/否/F/× → false，其它 → null */
 function tfBool(s) {
   s = String(s ?? '').trim();
   if (/^(正确|对|是|T|true|√)$/i.test(s)) return true;
   if (/^(错误|错|否|F|false|×)$/i.test(s)) return false;
   return null;
 }
+/** 客观题判分：判断题走 tfBool 归一；多选题按字母排序后比较（不计顺序）；其余去空格后精确比对 */
 function gradeObjective(q, user) {
   const t = q.type;
   if (t === 'true_false') {
@@ -2199,6 +2219,7 @@ const dbPut = (store, val, ms = 12000) => withTimeoutP(DB.put(store, val), ms, D
  * 知识点重要程度 = 其下题目的最高星，图谱节点大小与节点上方的星数按此显示。 */
 const IMP_LABEL = { 1: '了解', 2: '一般', 3: '较重要', 4: '重要', 5: '核心' };
 const IMP_COLOR = { 1: '#94a3b8', 2: '#64748b', 3: '#0ea5e9', 4: '#f59e0b', 5: '#ef4444' };
+/** 知识点重要度（1~5 星）；缺省或越界一律按 3 星处理 */
 function impOf(q) { const n = q && +q.importance || 0; return n >= 1 && n <= 5 ? n : 3; }
 /** 五颗星 pill：点第几颗设为几星；data-qid 供 setImportance 保存后就地替换刷新 */
 function impStarsHTML(q) {
@@ -2233,6 +2254,7 @@ async function setImportance(qid, n, ev) {
     toast('重要程度保存失败：' + (e && e.message || e), 'err');
   }
 }
+/** 题目笔记正文；没有笔记时返回空串，免得调用方到处判 undefined */
 function qNote(q) { return q && typeof q.note === 'string' ? q.note : ''; }
 /** 保存题目笔记。trim 后与旧值一致直接跳过；写盘超时/失败回滚内存值，避免界面与磁盘不一致 */
 async function saveQNote(qid, text, silent) {
@@ -2299,6 +2321,7 @@ function bindQNotes(root, register) {
 }
 /* 当前复习会话里笔记的强制落盘句柄：翻卡/评分前调用，防止还在防抖窗口内就切走 */
 let revNoteFlush = null;
+/** 主观题判分：设置里选「自评」直接返回 null 让用户自己打分；选 AI 时请求模型给分与评语（25s 超时、失败熔断 5 分钟） */
 async function gradeSubjective(q, user) {
   if (state.settings.grading === 'self') return { correct: null, aiNote: '' };
   if (Date.now() < aiGradeDownUntil) return { correct: null, aiNote: '', error: true, circuit: true };
@@ -2341,6 +2364,7 @@ async function refreshData() {
 
 /* ---------- 路由 ---------- */
 let curView = 'dash';
+/** 路由入口：切 #view 内容 + 侧栏高亮 + 手机标题；跳进板块内视图时自动跟随板块（VIEW_SEC） */
 function go(v) {
   // 切换页面时清理键盘监听，避免练习/考试两套快捷键互相干扰
   if (typeof keyHandler !== 'undefined' && keyHandler) { document.removeEventListener('keydown', keyHandler); keyHandler = null; }
@@ -2366,15 +2390,8 @@ document.querySelectorAll('.nav-item').forEach(n => {
   // 导航栏调窄后文字会被省略成「…」，补个原生提示让鼠标悬停能看到全名
   n.title = (n.querySelector('.txt') && n.querySelector('.txt').textContent) || '';
 });
-/* v1.51.0：顶部板块切换卡——点击切板块并进入该板块第一个功能。
+/* v2.4.0：侧栏顶部只是「当前工作区」指示条，切换入口移到首页顶部（dashSec）。
  * 启动时的板块恢复在底部启动流程里做（须等 settings 从 IndexedDB 读出）。 */
-document.querySelectorAll('.nav-sec-card').forEach(c => {
-  c.onclick = () => {
-    const sec = c.dataset.sec;
-    if (document.body.dataset.sec !== sec) applySection(sec, true);
-    go(SEC_HOME_VIEW[sec] || 'dash');
-  };
-});
 /* ============ v2.3.0 随身模式：抽屉导航 + 底部标签栏 ============
  * 只在 ≤680px 的网页版生效（桌面版窗口不进入这套布局）。
  * 侧栏 DOM 完全复用：手机上把它平移到屏幕外，汉堡按钮滑出、点遮罩收回；
@@ -2382,6 +2399,7 @@ document.querySelectorAll('.nav-sec-card').forEach(c => {
 function mMobile() {
   return !document.body.classList.contains('is-desktop') && window.matchMedia('(max-width:680px)').matches;
 }
+/** 手机抽屉开合：body.m-drawer 驱动 CSS 平移，打开时同步遮罩与板块高亮 */
 function mDrawer(open) {
   document.body.classList.toggle('m-drawer', !!open);
   if (open) mSyncDrawerSec();
@@ -2477,9 +2495,7 @@ window.addEventListener('beforeinstallprompt', e => {
   const b = document.getElementById('pwaInstallBtn');
   if (b) b.style.display = '';
 });
-function pwaInstallable() {
-  return !!(window.__pwaPrompt || (navigator.standalone === false && mMobile()));
-}
+/** 触发浏览器安装提示（beforeinstallprompt 暂存的事件）；不支持的浏览器给出操作指引 */
 async function pwaInstall() {
   const p = window.__pwaPrompt;
   if (!p) { toast('请用手机浏览器菜单里的「添加到主屏幕」；电脑上可点地址栏右侧的安装图标', 'err'); return; }
@@ -2488,6 +2504,7 @@ async function pwaInstall() {
   window.__pwaPrompt = null;
   toast('已发送安装请求', 'ok');
 }
+/** 生成 Web App Manifest 与图标（canvas 现画，不依赖外置文件），让手机可「添加到主屏幕」；桌面版直接返回 */
 function initPwa() {
   if (IS_DESKTOP) return;                     // 桌面版本身就是安装包
   try {
@@ -2800,6 +2817,7 @@ let updLastWasSilent = false;
 /** 检查更新卡死的兜底：超时仍未出结果就明确告知，绝不让界面停在转圈 */
 let updCheckTimer = 0;
 const UPD_CHECK_TIMEOUT = 15000;
+/** 检查更新：silent=true 时静默（启动自动查），有结果才提示；失败不打扰用户 */
 async function checkAppUpdate(silent) {
   if (!IS_DESKTOP || !window.electronAPI.checkUpdate) { if (!silent) toast('网页版不支持在线更新', 'err'); return; }
   if (updState.checking) { if (!silent) toast('正在检查中，请稍候…', 'amber'); return; }   // 防重入
@@ -3206,13 +3224,53 @@ function masBoardHTML() {
   </div>`;
 }
 
+/** v2.4.0：首页顶部「知识库 / 模拟题库」切换条——首页是主入口，当前工作区放最显眼处 */
+function dashSecSwitchHTML() {
+  const on = document.body.dataset.sec === 'kb' ? 'kb' : 'tik';
+  const items = [
+    { k: 'kb', ico: '📚', name: '知识库', hint: '资料 · 笔记 · 图谱' },
+    { k: 'tik', ico: '📝', name: '模拟题库', hint: '出题 · 练习 · 考试' },
+  ];
+  return `<div class="dsec-switch" role="tablist" aria-label="工作区切换">${items.map(it => `
+    <button type="button" class="dsec${it.k === on ? ' active' : ''}" data-sec="${it.k}" role="tab"
+      aria-selected="${it.k === on}" onclick="dashSec('${it.k}')">
+      <span class="dsec-ico">${it.ico}</span>
+      <span class="dsec-txt"><b>${it.name}</b><small>${it.hint}</small></span>
+    </button>`).join('')}</div>`;
+}
+
+/** 点首页顶部切换条：切工作区 + 原地重绘首页 + 侧栏同步高亮（不跳页，只换视角） */
+function dashSec(sec) {
+  if (sec !== 'kb' && sec !== 'tik') return;
+  if (document.body.dataset.sec === sec) return;
+  applySection(sec, true);
+  viewDash();
+  toast(`已切换到「${sec === 'kb' ? '知识库' : '模拟题库'}」工作区`, 'ok');
+}
+
 async function viewDash() {
+  const secNow = document.body.dataset.sec === 'kb' ? 'kb' : 'tik';
   const qn = state.questions.length, dn = state.docs.length;
   const acc = state.practice.length ? Math.round(state.practice.filter(p => p.is_correct).length / state.practice.length * 100) : null;
   const mistN = state.mistakes.length;
   const q0 = buildRevQueue();
+  /* 快速开始按当前工作区给不同入口，切换板块后一眼看到该做什么 */
+  const quick = secNow === 'kb' ? [
+    ['primary', 'kbdocs', '📚 知识库文档'],
+    ['primary', 'ask', '✏️ AI 助教'],
+    ['ghost', 'kb', '📝 笔记聚合'],
+    ['ghost', 'kp', '🧠 关系图谱'],
+  ] : [
+    ['primary', 'docs', '① 导入文档'],
+    ['primary', 'gen', '② AI 生成题目'],
+    ['primary', 'practice', '③ 开始练习'],
+    ['ghost', 'exam', '🎓 模拟考试'],
+    ['ghost', 'review', '🔁 间隔复习'],
+    ['ghost', 'mist', '❌ 错题本'],
+  ];
   $('#view').innerHTML = `
-  <h1>首页总览</h1><div class="sub">欢迎使用模拟题库 v${APP_VER_SHOWN}</div>
+  ${dashSecSwitchHTML()}
+  <h1>首页总览</h1><div class="sub">${secNow === 'kb' ? '知识库工作区' : '题库工作区'} · 欢迎使用模拟题库 v${APP_VER_SHOWN}</div>
   ${masPlanHTML()}
   ${weekCardHTML()}
   <div class="grid c4" style="margin-bottom:16px">
@@ -3238,18 +3296,13 @@ async function viewDash() {
   <div class="grid c2">
     <div class="card"><h3>⚡ 快速开始</h3>
       <div class="row">
-        <button class="primary" onclick="go('docs')">① 导入文档</button>
-        <button class="primary" onclick="go('gen')">② AI 生成题目</button>
-        <button class="primary" onclick="go('practice')">③ 开始练习</button>
-        <button class="ghost" onclick="go('exam')">🎓 模拟考试</button>
-        <button class="ghost" onclick="go('review')">🔁 间隔复习</button>
-        <button class="ghost" onclick="go('kp')">🧠 关系图谱</button>
-        <button class="ghost" onclick="go('kbdocs')">📚 知识库文档</button>
+        ${quick.map(([cls, v, label]) => `<button class="${cls}" onclick="go('${v}')">${label}</button>`).join('')}
       </div>
       <p style="color:var(--muted);margin-top:12px;line-height:1.8;font-size:13px">
-        支持导入 <b>PDF / DOCX / TXT / MD</b> 文档；在「设置」中配置任意
-        OpenAI 兼容接口（DeepSeek、通义、Kimi、GLM 等）即可 AI 出题；未配置时可用「本地快速出题」体验完整流程。
-        ${IS_DESKTOP ? '<br><b style="color:var(--green)">桌面版已启用</b>：本地解析文档、AI 请求由主进程发出，无需担心跨域。' : ''}</p>
+        ${secNow === 'kb'
+      ? `知识库用来沉淀资料与笔记：导入 <b>PDF / DOCX / TXT / MD</b> 后在「知识库文档」里整理、打标签、写笔记，重点会自动汇进「笔记聚合」，「关系图谱」把知识点连成一张网。`
+      : `支持导入 <b>PDF / DOCX / TXT / MD</b> 文档；在「设置」中配置任意 OpenAI 兼容接口（DeepSeek、通义、Kimi、GLM 等）即可 AI 出题；未配置时可用「本地快速出题」体验完整流程。`}
+        ${IS_DESKTOP && secNow === 'tik' ? '<br><b style="color:var(--green)">桌面版已启用</b>：本地解析文档、AI 请求由主进程发出，无需担心跨域。' : ''}</p>
     </div>
     <div class="card"><h3>🕒 最近题目</h3>
       ${state.questions.slice(0, 5).map(q => `
@@ -5692,9 +5745,6 @@ function kpKindCount(list) {
   return [c.co ? `同题共现 ${c.co}` : '', c.kb ? `同文档 ${c.kb}` : '', c.sec ? `同章节 ${c.sec}` : '', c.qsim ? `题干相似 ${c.qsim}` : '']
     .filter(Boolean).join(' · ') || '无';
 }
-/** 只取名字（给旧调用方 / 提示文案用） */
-function kpNeighbors(name) { return kpNeighborInfo(name).map(x => x.name); }
-
 /** 悬停提示浮层：知识点名、题量、正确率、所属章节、双链数量 */
 function kpTipShow(i, mx, my) {
   const tip = document.getElementById('kpTip');
@@ -11113,8 +11163,9 @@ async function fullRestore() {
     if (!r) return;
     if (r.canceled) return;
     if (!r.ok) { toast('恢复失败：' + (r.error || '未知错误'), 'err'); return; }
-    alert(`恢复完成：${r.banks} 个题库已还原。\n恢复前的数据已留存于数据目录的 backups 文件夹，如需回退可联系该文件夹说明操作。`);
-    location.reload();   // 全量换数据文件，整页重载最干净
+    toast(`恢复完成：${r.banks} 个题库已还原，正在重新加载…`, 'ok');
+    // 全量换数据文件后整页重载最干净；留 1.2s 让提示可见
+    setTimeout(() => location.reload(), 1200);
   } catch (e) { toast('恢复失败：' + String(e && e.message || e), 'err'); }
 }
 /* ---------- v2.2.0：题库包（.mtkpkg）与人机互通 ----------
@@ -11157,6 +11208,7 @@ async function mtkpackCollect() {
     questions, kp_notes: kpn, docs,
   };
 }
+/** 导出题库包（.mtkpkg）：当前题库的题目 + 知识点笔记 + 知识库文档打成一个文件，发给别人导入 */
 async function mtkpackExport() {
   try {
     toast('正在打包题库…');
@@ -11179,6 +11231,7 @@ function pickOneFile(accept) {
     inp.click();
   });
 }
+/** 导入题库包：按「题干 + 答案」去重合并，重复题跳过；文档同名自动加序号，知识点笔记只补空不覆盖已有内容 */
 async function mtkpackImport() {
   const f = await pickOneFile('.mtkpkg,.json,application/json');
   if (!f) return;
@@ -11488,7 +11541,7 @@ async function viewSet() {
           <button type="button" class="ghost" id="sNavwToggle" style="padding:5px 11px;font-size:12px" onclick="toggleNavCollapsed();renderSetNavwVal()">${s.navCollapsed ? '▶ 展开导航栏' : '◀ 收起导航栏'}</button>
           <button type="button" class="ghost" style="padding:5px 11px;font-size:12px" onclick="if(resetNavOrder())toast('导航栏已恢复默认排序','ok');else toast('当前已是默认排序','info')">↕ 恢复默认排序</button>
         </div>
-        <span style="display:block;color:var(--muted);font-size:11px;margin-top:6px">导航按<b>两大板块</b>组织——点侧栏顶部的 <b>知识库</b>（MD 文档、笔记聚合、图谱）或 <b>模拟题库</b>（出题资料、出题、题库、练习、考试、错题、复习）切换卡，下方只显示当前板块的功能；<b>首页总览、统计分析</b>是通用项，两板块都能用，软件会记住你上次所在的板块。<b>帮助</b>与<b>设置</b>固定在导航栏最底部，不参与排序。<b>长按</b>导航项约 0.4 秒（会轻微下压）后再上下拖动即可排序，目标位置有蓝色插入线；单击仍是正常跳转。<b>顺序调整只在同一组内生效</b>，板块归属固定。此处可一键恢复默认。窗口宽度小于 900px 时导航栏会自动收成图标条；把宽度调窄到 160px 时导航文字会省略为「…」，鼠标悬停可看全名。</span>
+        <span style="display:block;color:var(--muted);font-size:11px;margin-top:6px">导航按<b>两大板块</b>组织——在<b>首页顶部</b>点「知识库 / 模拟题库」切换工作区（知识库 = MD 文档、笔记聚合、图谱；模拟题库 = 出题资料、出题、题库、练习、考试、错题、复习），侧栏只显示当前板块的功能；<b>首页总览、统计分析</b>是通用项，两板块都能用，软件会记住你上次所在的板块。<b>帮助</b>与<b>设置</b>固定在导航栏最底部，不参与排序。<b>长按</b>导航项约 0.4 秒（会轻微下压）后再上下拖动即可排序，目标位置有蓝色插入线；单击仍是正常跳转。<b>顺序调整只在同一组内生效</b>，板块归属固定。此处可一键恢复默认。窗口宽度小于 900px 时导航栏会自动收成图标条；把宽度调窄到 160px 时导航文字会省略为「…」，鼠标悬停可看全名。</span>
       </div>
     </div>
     <label class="f"><span>简答题 / 长填空 判分方式</span>
@@ -11716,6 +11769,18 @@ async function viewSet() {
     });
   }
   renderThemeGrid();
+  /* 默认出题难度：改动即保存（出题页 #gDiff 的初始选中值读 settings.defaultDifficulty） */
+  const sDiffEl = $('#sDiff');
+  if (sDiffEl) {
+    sDiffEl.value = state.settings.defaultDifficulty || 'medium';
+    sDiffEl.onchange = async () => {
+      state.settings.defaultDifficulty = sDiffEl.value;
+      try {
+        await DB.kvSet('settings', state.settings);
+        toast('默认出题难度已保存：' + (DIFFS[sDiffEl.value] || sDiffEl.value), 'ok');
+      } catch (e) { toast('保存失败：' + e.message, 'err'); }
+    };
+  }
   /* 暴露给标题栏主题面板：切换主题后同步刷新设置页色卡的选中态 */
   window.renderThemeGrid = renderThemeGrid;
 
@@ -12659,14 +12724,13 @@ function applyAppTitle(ver) {
   const el = $('#logoVer');
   if (el) el.textContent = `v${v}`;                 // 侧边栏副标题
   const tb = $('#tbTitle');
-  if (tb) tb.textContent = `模拟题库 v${v}${window.__bankTitle || ''}`;        // 自绘标题栏文字（多题库时追加「· 题库名」）
+  if (tb) tb.textContent = `模拟题库 v${v}${__bankTitle || ''}`;        // 自绘标题栏文字（多题库时追加「· 题库名」）
 }
 let __bankTitle = '';
 function applyBankTitle() {
   if (!IS_DESKTOP) return;
   const b = (state.banks || []).find(x => x.id === state.bankId);
   __bankTitle = b ? ` · ${b.name}` : '';
-  window.__bankTitle = __bankTitle;
   applyAppTitle();
 }
 applyAppTitle();

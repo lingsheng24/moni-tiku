@@ -4,6 +4,22 @@
  * - 本地文件解析（PDF / DOCX / TXT / MD）
  * - AI 请求代理（主进程发出，免受浏览器跨域限制）
  * - 文件保存对话框（导出 Word / 备份 JSON）
+ *
+ * ── IPC 通道索引（渲染层统一经 preload 的 window.electronAPI 调用，通道名即契约）──
+ *  当前题库数据   data:all / get / add / put / del / clear
+ *  全局配置       kv:get / kv:set（settings 里的 apiKey 用 safeStorage 加密后落盘）
+ *  题库私有配置   bankkv:get / set（科目等随题库隔离）
+ *  多题库         bank:list / current / create / switch / rename / del
+ *  知识库文档     kbdoc:dir / list / read / write / del / rename（<数据目录>/knowledge/*.md）
+ *  导入导出       file:import、file:save、app:exportAll、app:importAll、paper:saveDocx、paper:savePdf
+ *  数据位置       data:getPath / choosePath / resetPath
+ *  AI 与联网      ai:chat、ai:chatStream、web:search、web:suggest
+ *  系统           app:openDataDir / openBackupDir / openExternal / version、help:imgs（同步取帮助配图）
+ *  自动更新       app:checkUpdate / downloadUpdate / cancelDownload / installUpdate / updateSources / setUpdateSource
+ *  窗口控制       win:min / maxToggle / close（单向 send）
+ *  事件推送       update（更新状态）、ai:stream（流式分片）、win-state（最大化状态）、menu（菜单动作）
+ * 新增通道时必须同步三处：本文件 ipcMain 注册、preload.js 暴露、渲染层调用点。
+ * ────────────────────────────────────────────────────────────────────────
  */
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, safeStorage } = require('electron');
 const path = require('path');
@@ -377,7 +393,9 @@ function dailySnapshot() {
 function regData() {
   /* v1.31.0 起 data:xx 系列全部作用于「当前题库」（cur()），多题库间数据完全隔离 */
   ipcMain.handle('data:all', (e, store) => { if (!STORES.includes(store)) return []; return cur()[store]; });
+  /** 取单条记录：按 id 在当前题库的 store 里查，找不到返回 null */
   ipcMain.handle('data:get', (e, store, id) => cur()[store].find(x => x.id === id) || null);
+  /** 新增记录：自增 id = max(现有最大 id, seq) + 1，写完立即落盘，返回新 id */
   ipcMain.handle('data:add', (e, store, item) => {
     const d = cur();
     const maxId = d[store].reduce((m, x) => Math.max(m, x.id || 0), 0);
@@ -385,14 +403,17 @@ function regData() {
     item.id = next; d.seq[store] = next;
     d[store].push(item); saveBank(); return next;
   });
+  /** 覆盖整条记录（按 id 定位；不存在则追加），用于编辑题目/文档 */
   ipcMain.handle('data:put', (e, store, item) => {
     const d = cur(); const i = d[store].findIndex(x => x.id === item.id);
     if (i >= 0) d[store][i] = item; else d[store].push(item);
     saveBank(); return true;
   });
+  /** 按 id 删除单条记录 */
   ipcMain.handle('data:del', (e, store, id) => {
     const d = cur(); d[store] = d[store].filter(x => x.id !== id); saveBank(); return true;
   });
+  /** 清空某个 store（危险操作，前端必须二次确认） */
   ipcMain.handle('data:clear', (e, store) => { const d = cur(); d[store] = []; saveBank(); return true; });
   /* ---- settings 透明加解密（v1.40.0）----
    * apiKey 原来明文躺在 meta.json 里，现在用 safeStorage（Windows DPAPI，绑定当前用户）加密。
@@ -422,16 +443,19 @@ function regData() {
     }
     return out;
   };
+  /** 读全局 kv；settings 会自动解密其中的 apiKey（safeStorage / DPAPI） */
   ipcMain.handle('kv:get', (e, k) => {
     const v = loadMeta().kv[k] ?? null;
     return (k === 'settings' && v && typeof v === 'object') ? unsealSettings(v) : v;
   });
+  /** 写全局 kv；settings 落盘前把 apiKey 加密，渲染层无感知 */
   ipcMain.handle('kv:set', (e, k, v) => {
     loadMeta().kv[k] = (k === 'settings' && v && typeof v === 'object') ? sealSettings(v) : v;
     saveMeta(); return true;
   });
   /* 题库私有 kv（v1.31.0）：目前存 subjects——科目随题库隔离 */
   ipcMain.handle('bankkv:get', (e, k) => cur().kv[k] ?? null);
+  /** 写题库私有 kv（subjects 等随题库隔离的数据） */
   ipcMain.handle('bankkv:set', (e, k, v) => { cur().kv[k] = v; saveBank(); return true; });
 
   /* ---- 题库管理（v1.31.0；v1.32.0 起每题库一个独立数据文件） ---- */
@@ -443,8 +467,11 @@ function regData() {
     };
   };
   const bankList = () => Object.entries(loadMeta().banks).map(([id, b]) => ({ id, name: b.name, createdAt: b.createdAt, counts: bankCounts(id) }));
+  /** 题库列表 + 各库计数（文档/题目/试卷/练习/错题/复习），供题库管理页渲染 */
   ipcMain.handle('bank:list', () => bankList());
+  /** 当前题库 id */
   ipcMain.handle('bank:current', () => loadMeta().curBank);
+  /** 新建题库：名称去空格限 20 字、重名校验，初始化空数据结构 */
   ipcMain.handle('bank:create', (e, name) => {
     name = String(name || '').trim().slice(0, 20);
     if (!name) return { ok: false, error: '题库名不能为空' };
@@ -461,6 +488,7 @@ function regData() {
     saveMeta();
     return { ok: true, id, list: bankList() };
   });
+  /** 切换当前题库：先 flush 旧库缓存再载入新库，返回新库数据 */
   ipcMain.handle('bank:switch', (e, id) => {
     const d = loadMeta();
     if (!d.banks[id]) return { ok: false, error: '题库不存在' };
@@ -473,6 +501,7 @@ function regData() {
     }
     return { ok: true, id };
   });
+  /** 重命名题库（改名不影响数据文件与其内容） */
   ipcMain.handle('bank:rename', (e, id, name) => {
     const d = loadMeta();
     name = String(name || '').trim().slice(0, 20);
@@ -485,6 +514,7 @@ function regData() {
     if (id === d.curBank) saveBank();
     return { ok: true, list: bankList() };
   });
+  /** 删除题库及其数据文件；删的是当前库时自动切回默认库 */
   ipcMain.handle('bank:del', (e, id) => {
     const d = loadMeta();
     if (id === DEFAULT_BANK) return { ok: false, error: '默认题库不可删除' };
@@ -496,6 +526,7 @@ function regData() {
     saveMeta();
     return { ok: true, removedQuestions: n, curBank: d.curBank, list: bankList() };
   });
+  /** 在资源管理器中定位当前题库的数据文件 */
   ipcMain.handle('app:openDataDir', () => { shell.showItemInFolder(dataFile()); return true; });
   /* v1.40.0：打开每日快照目录（存在才打开，否则打开数据目录） */
   ipcMain.handle('app:openBackupDir', () => {
@@ -520,7 +551,9 @@ function regData() {
     return n;
   }
   function kbEnsureDir() { try { fs.mkdirSync(kbDir(), { recursive: true }); } catch (_) { } }
+  /** 知识库目录绝对路径（不存在则自动创建） */
   ipcMain.handle('kbdoc:dir', () => { kbEnsureDir(); return kbDir(); });
+  /** 列出 knowledge/*.md：name / size / mtime / ctime，按修改时间倒序 */
   ipcMain.handle('kbdoc:list', () => {
     kbEnsureDir();
     const out = [];
@@ -536,16 +569,19 @@ function regData() {
     out.sort((a, b) => b.mtime - a.mtime);
     return out;
   });
+  /** 读单个 MD 文档正文（入参 name 不带 .md 后缀） */
   ipcMain.handle('kbdoc:read', (e, name) => {
     try { return fs.readFileSync(path.join(kbDir(), kbSafeName(name)), 'utf8'); }
     catch (_) { return null; }
   });
+  /** 写 MD 文档：自动补 .md、替换 Windows 非法字符，返回 mtime */
   ipcMain.handle('kbdoc:write', (e, name, content) => {
     kbEnsureDir();
     const file = path.join(kbDir(), kbSafeName(name));
     try { fs.writeFileSync(file, String(content ?? ''), 'utf8'); return { ok: true, mtime: fs.statSync(file).mtimeMs }; }
     catch (err) { return { ok: false, error: String(err && err.message || err) }; }
   });
+  /** 删除文档：移到 knowledge/.trash/（带时间戳），可手工找回 */
   ipcMain.handle('kbdoc:del', (e, name) => {
     try {
       const file = path.join(kbDir(), kbSafeName(name));
@@ -557,6 +593,7 @@ function regData() {
       return { ok: true };
     } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
   });
+  /** 重命名文档；目标同名时拒绝并返回错误 */
   ipcMain.handle('kbdoc:rename', (e, oldName, newName) => {
     try {
       kbEnsureDir();
@@ -596,6 +633,7 @@ function regData() {
       return { ok: true, path: target, banks: Object.keys(banks).length };
     } catch (err) { return { ok: false, error: err.message }; }
   });
+  /** 全量恢复：用备份文件覆盖所有题库与全局设置，恢复前自动留底到 backups/before-restore-* */
   ipcMain.handle('app:importAll', async () => {
     try {
       const res = await dialog.showOpenDialog(win, {
@@ -644,6 +682,7 @@ function regData() {
     const cfg = readPathCfg();
     return { path: dataFile(), custom: !!cfg.customPath, defaultPath: path.join(app.getPath('userData'), 'data.json') };
   });
+  /** 选择新的数据目录（可指向同步盘 / 移动硬盘），必要时把现有数据迁过去 */
   ipcMain.handle('data:choosePath', async () => {
     const res = await dialog.showSaveDialog(win, {
       title: '选择数据文件的新位置',
@@ -673,6 +712,7 @@ function regData() {
       return { ok: true, path: target };
     } catch (err) { return { ok: false, error: err.message }; }
   });
+  /** 数据目录恢复默认位置（userData） */
   ipcMain.handle('data:resetPath', async () => {
     try {
       const old = readPathCfg().customPath;
@@ -717,6 +757,7 @@ async function parsePdf(filePath) {
   return { text, pages: pdf.numPages };
 }
 function regFile() {
+  /** 弹文件选择框并解析 PDF / DOCX / TXT / MD，返回每份的纯文本与页数 */
   ipcMain.handle('file:import', async () => {
     const res = await dialog.showOpenDialog(win, {
       title: '选择要导入的文档',
@@ -743,6 +784,7 @@ function regFile() {
     }
     return out;
   });
+  /** 弹保存对话框写文件：导出 JSON 备份 / 题库包 / Anki 卡片 / 模板等都走这里 */
   ipcMain.handle('file:save', async (e, { name, content, filters }) => {
     const res = await dialog.showSaveDialog(win, {
       title: '保存文件', defaultPath: name,
@@ -917,6 +959,7 @@ async function withRetry(fn, retries = 3) {
   throw lastErr;
 }
 function regAI() {
+  /** AI 请求代理（主进程发出，绕过浏览器跨域）：429/5xx/网络错误指数退避重试，4xx 直接失败 */
   ipcMain.handle('ai:chat', async (e, { apiBase, apiKey, model, messages, jsonMode, temperature }) => {
     const url = String(apiBase || '').replace(/\/+$/, '') + '/chat/completions';
     const body = JSON.stringify({
@@ -1203,6 +1246,7 @@ async function searchWeb(q, engine = 'bingcn', limit = 10) {
   return { ok: false, query: q, engine, engineName: eng.name, searchUrl: eng.build(q), results: [], error: errors.join('；') || '联网查询失败' };
 }
 function registerWebSearch() {
+  /** 联网查询：抓搜索结果页并解析为 [{title,url,snippet,site}] */
   ipcMain.handle('web:search', async (e, { q, engine, limit } = {}) => {
     const query = String(q || '').trim();
     if (!query) return { ok: false, error: '查询内容为空', results: [] };
@@ -1537,6 +1581,7 @@ function updUnavailable() {
   return '';
 }
 function regUpdate() {
+  /** 当前应用版本号（安装包实际版本，用于标题栏与更新判断） */
   ipcMain.handle('app:version', () => app.getVersion());
   /** 检查更新：
    *  结果由「自己并发探测 latest.yml」给出（通常 1 秒内就有答案），
@@ -1633,15 +1678,6 @@ function regUpdate() {
     if (!autoUpdater) return { ok: false, message: '更新组件不可用' };
     autoUpdater.quitAndInstall(false, true);
     return { ok: true };
-  });
-  /** 当前生效的更新源（打包时由 package.json → build.publish.url 写入） */
-  ipcMain.handle('app:getUpdateUrl', () => {
-    try {
-      const f = path.join(app.isPackaged ? process.resourcesPath : __dirname, 'app-update.yml');
-      const yml = fs.readFileSync(f, 'utf8');
-      const m = yml.match(/url:\s*['"]?([^'"\n]+)/);
-      return { ok: true, url: m ? m[1].trim() : '' };
-    } catch (e) { return { ok: false, url: '' }; }
   });
 }
 
@@ -1769,11 +1805,14 @@ function migrateLegacyData() {
 
 /* ---------------- 自绘标题栏：窗口控制 ---------------- */
 function regWindow() {
+  /** 自绘标题栏：最小化窗口 */
   ipcMain.on('win:min', () => { if (win && !win.isDestroyed()) win.minimize(); });
+  /** 自绘标题栏：最大化 / 还原切换 */
   ipcMain.on('win:maxToggle', () => {
     if (!win || win.isDestroyed()) return;
     if (win.isMaximized()) win.unmaximize(); else win.maximize();
   });
+  /** 自绘标题栏：关闭窗口（按 settings.closeAction 决定最小化到托盘还是退出） */
   ipcMain.on('win:close', () => { if (win && !win.isDestroyed()) win.close(); });
   /* v1.42.0：帮助手册配图数据（preload 同步取，见 preload.js 顶部）。
    * 打包版在 resources/help-imgs.json（afterPack 放置），开发模式在 desktop/ 下。 */

@@ -42,17 +42,18 @@ describe('v1.51.0 两大板块切换工作区', () => {
     expect(m).toContain("tik: 'gen'");
   });
 
-  test('applySection：写 body[data-sec]、切换卡高亮、save 时持久化 navSection', () => {
+  test('applySection：写 body[data-sec]、save 时持久化 navSection（高亮交给 CSS）', () => {
     const f = between('function applySection', '/** 期望顺序 = 用户拖过的');
     expect(f).toContain("document.body.dataset.sec = sec");
-    expect(f).toContain("c.classList.toggle('active', c.dataset.sec === sec)");
+    expect(f).not.toContain('classList.toggle');            // v2.4.0：指示条显隐由 body[data-sec] 驱动
     expect(f).toContain("state.settings.navSection = sec");
     expect(f).toContain("DB.kvSet('settings', state.settings)");
     expect(f).toContain("if (sec !== 'kb' && sec !== 'tik') sec = 'kb'");
   });
 
-  test('侧栏结构：两块切换卡（含单字折叠态 知/题），内容按板块归组', () => {
-    expect(HTML).toMatch(/<div class="nav-sections">[\s\S]*?data-sec="kb"[\s\S]*?data-sec="tik"/);
+  test('侧栏结构：顶部只显示当前工作区指示条（含单字折叠态 知/题），内容按板块归组', () => {
+    expect(HTML).toMatch(/<div class="nav-sec-now"[\s\S]*?data-s="kb"[\s\S]*?data-s="tik"/);
+    expect(HTML).not.toContain('nav-sec-card');
     expect(HTML).toContain('<span class="sec-mini">知</span>');
     expect(HTML).toContain('<span class="sec-mini">题</span>');
     const kbGroup = between('<div class="nav-group" data-g="sec-kb" data-sec="kb">', '<!-- 模拟题库板块');
@@ -73,17 +74,17 @@ describe('v1.51.0 两大板块切换工作区', () => {
     expect(HTML).toContain('.nav-group[data-sec]{display:none}');
     expect(HTML).toContain('body[data-sec="kb"] .nav-group[data-sec="kb"]{display:flex}');
     expect(HTML).toContain('body[data-sec="tik"] .nav-group[data-sec="tik"]{display:flex}');
-    expect(HTML).toContain('.nav-sec-card.active');
-    expect(HTML).toMatch(/\.nav-sec-card \.sec-meta small\{font-size:10px/);
+    expect(HTML).toContain('body[data-sec="kb"] .nsn-set[data-s="kb"]');
+    expect(HTML).toMatch(/\.nsn-set \.sec-meta small\{font-size:10px/);
   });
 
   test('折叠/窄屏：卡竖排、副标题隐藏、单字显示', () => {
-    expect(HTML).toContain('body.nav-collapsed .nav-sec-card .sec-meta{display:none}');
-    expect(HTML).toContain('body.nav-collapsed .nav-sec-card .sec-mini{display:block}');
-    expect(HTML).toContain('body.nav-collapsed .nav-sections{grid-template-columns:1fr;width:44px;gap:6px}');
+    expect(HTML).toContain('body.nav-collapsed .nsn-set .sec-meta{display:none}');
+    expect(HTML).toContain('body.nav-collapsed .nsn-set .sec-mini{display:block}');
+    expect(HTML).toContain('body.nav-collapsed .nav-sec-now{width:44px;padding:8px 0;margin-left:auto;margin-right:auto}');
     const media = between('@media(max-width:900px){.main{padding:16px}', '/* ---------- 自绘标题栏');
-    expect(media).toContain('.nav-sec-card .sec-mini{display:block}');
-    expect(media).toContain('.nav-sec-card .sec-meta{display:none}');
+    expect(media).toContain('.nsn-set .sec-mini{display:block}');
+    expect(media).toContain('.nsn-set .sec-meta{display:none}');
   });
 
   test('go()：跳到板块内视图自动切板块并持久化', () => {
@@ -97,10 +98,10 @@ describe('v1.51.0 两大板块切换工作区', () => {
     expect(boot).toContain("applySection(state.settings.navSection === 'tik' ? 'tik' : 'kb', false)");
   });
 
-  test('板块卡点击：切板块并进入该板块首页视图', () => {
-    const f = between("document.querySelectorAll('.nav-sec-card').forEach", '/* 桌面版汉化菜单事件 */');
-    expect(f).toContain('SEC_HOME_VIEW[sec]');
-    expect(f).toContain('go(SEC_HOME_VIEW[sec] || \'dash\')');
+  test('v2.4.0：侧栏指示条纯展示，切换集中在首页顶部；手机顶栏仍保留知/题切换', () => {
+    expect(HTML).not.toContain("querySelectorAll('.nav-sec-card')");
+    expect(between('function dashSec(sec)', 'async function viewDash')).toContain('applySection(sec, true);');
+    expect(HTML).toContain("document.querySelectorAll('#mTopbar .m-sec-btn')");
   });
 
   test('settings 默认值含 navSection，body 初始 data-sec="kb"', () => {

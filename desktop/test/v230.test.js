@@ -309,3 +309,31 @@ describe('v2.3.0 · 数据管理卡片分区', () => {
     expect(card).toContain("!IS_DESKTOP ? `<div class=\"dm-sec\">\n      <div class=\"dm-sec-h\">手机 / 平板");
   });
 });
+
+describe('v2.4.0 · 首页顶部板块切换条', () => {
+  test('切换条渲染函数与点击处理存在', () => {
+    expect(HTML).toContain('function dashSecSwitchHTML()');
+    expect(HTML).toContain('function dashSec(sec)');
+    expect(HTML).toContain("applySection(sec, true);\n  viewDash();");
+  });
+
+  test('两个板块按钮 + 选中态 + 首页调用', () => {
+    const s = HTML.indexOf('function dashSecSwitchHTML()');
+    const body = HTML.slice(s, HTML.indexOf('\n}', s));
+    expect(body.match(/k: '(kb|tik)'/g).length).toBe(2);
+    expect(body).toContain("class=\"dsec${it.k === on ? ' active' : ''}\"");
+    expect(HTML.slice(HTML.indexOf('async function viewDash'))).toContain('${dashSecSwitchHTML()}');
+  });
+
+  test('快速开始随板块分支：知识库 4 项 / 题库 6 项', () => {
+    const s = HTML.indexOf('const quick = secNow');
+    const body = HTML.slice(s, HTML.indexOf('];', s + 200));
+    expect(body).toContain("'kbdocs'"); expect(body).toContain("'ask'"); expect(body).toContain("'kp'");
+    expect(body).toContain("'docs'"); expect(body).toContain("'gen'"); expect(body).toContain("'practice'");
+  });
+
+  test('手机端隐藏（顶栏已有知/题切换），侧栏切换卡保留', () => {
+    expect(HTML).toContain('@media (max-width:680px){body:not(.is-desktop) .dsec-switch{display:none}}');
+    expect(HTML).toContain('<div class="nav-sec-now"');
+  });
+});

@@ -1,6 +1,6 @@
 {
   "name": "moni-tiku",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "description": "模拟题库 桌面版",
   "main": "main.js",

@@ -10,8 +10,6 @@ try {
 } catch (e) { console.warn('[preload] 帮助配图注入失败', e); }
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  /** 是否桌面版 */
-  isDesktop: true,
   /** 与网页版 IndexedDB 驱动同名的存储接口 */
   db: {
     open: () => Promise.resolve(true),
@@ -94,8 +92,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelDownload: () => invoke('app:cancelDownload'),
   /** 退出并安装已下载的更新（弹安装向导，非静默） */
   installUpdate: () => invoke('app:installUpdate'),
-  /** 读取内置更新源地址（只读，打包时已固定） */
-  getUpdateUrl: () => invoke('app:getUpdateUrl'),
   /** 可选下载源列表 + 最近测速结果 + 当前/锁定源 */
   getUpdateSources: () => invoke('app:updateSources'),
   /** 手动指定下载源；传 '' 恢复「自动选最快」 */

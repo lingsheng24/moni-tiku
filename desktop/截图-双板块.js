@@ -94,7 +94,7 @@ function check(name, cond, detail) {
     // 1) 初始：知识库板块
     const s1 = await cdp.eval(`(()=>({
       sec: document.body.dataset.sec,
-      active: document.querySelector('.nav-sec-card.active') && document.querySelector('.nav-sec-card.active').dataset.sec,
+      active: [...document.querySelectorAll('.nsn-set')].filter(n=>getComputedStyle(n).display!=='none').map(n=>n.dataset.s)[0],
       visible: [...document.querySelectorAll('.sidebar .nav-group')].filter(g => getComputedStyle(g).display !== 'none').map(g => (g.dataset.sec || g.dataset.g) + ':' + [...g.querySelectorAll('.nav-item')].map(n => n.dataset.v).join('>')),
     }))()`);
     check('启动默认知识库板块', s1.sec === 'kb' && s1.active === 'kb', JSON.stringify(s1));
@@ -105,11 +105,11 @@ function check(name, cond, detail) {
     await shot('1-知识库板块', { x: sw.x, y: sw.y, width: sw.w, height: Math.min(760, sw.h), scale: 2 });
 
     // 2) 点「模拟题库」卡 → 切板块 + 跳 AI 生成题目
-    await cdp.eval(`(async()=>{ document.querySelector('.nav-sec-card[data-sec="tik"]').click(); return true; })()`);
+    await cdp.eval(`(async()=>{ dashSec('tik'); return true; })()`);
     await sleep(700);
     const s2 = await cdp.eval(`(()=>({
       sec: document.body.dataset.sec, view: curView,
-      active: document.querySelector('.nav-sec-card.active').dataset.sec,
+      active: [...document.querySelectorAll('.nsn-set')].filter(n=>getComputedStyle(n).display!=='none').map(n=>n.dataset.s)[0],
       tikVisible: getComputedStyle(document.querySelector('[data-g="sec-tik"]')).display !== 'none',
       kbHidden: getComputedStyle(document.querySelector('[data-g="sec-kb"]')).display === 'none',
       saved: state.settings.navSection,
@@ -133,9 +133,9 @@ function check(name, cond, detail) {
     await cdp.eval(`(async()=>{ state.settings.navCollapsed = 1; applyNavWidth(); return true; })()`);
     await sleep(500);
     const s5 = await cdp.eval(`(()=>({
-      cardsVisible: [...document.querySelectorAll('.nav-sec-card')].every(c => getComputedStyle(c).display !== 'none'),
-      miniShown: getComputedStyle(document.querySelector('.nav-sec-card[data-sec="tik"] .sec-mini')).display !== 'none',
-      metaHidden: getComputedStyle(document.querySelector('.nav-sec-card[data-sec="tik"] .sec-meta')).display === 'none',
+      cardsVisible: getComputedStyle(document.querySelector('.nav-sec-now')).display !== 'none',
+      miniShown: getComputedStyle(document.querySelector('.nsn-set[data-s="tik"] .sec-mini')).display !== 'none',
+      metaHidden: getComputedStyle(document.querySelector('.nsn-set[data-s="tik"] .sec-meta')).display === 'none',
     }))()`);
     check('折叠态两卡竖排单字显示', s5.cardsVisible && s5.miniShown && s5.metaHidden, JSON.stringify(s5));
     const sw2 = await cdp.eval(snap);
